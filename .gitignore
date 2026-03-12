@@ -1,0 +1,29 @@
+# Rust
+/target/
+/**/target/           # if there are multiple crates
+/Cargo.lock           # if you prefer not to track it
+
+# Node / TypeScript
+/node_modules/
+agent/node_modules/   # or simply **/node_modules/
+npm-debug.log*
+yarn-error.log*
+/dist/
+/lib/
+/*.tsbuildinfo
+/*.js.map
+/**/*.d.ts
+
+# IDEs & editors
+/.vscode/
+/.idea/
+/*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# other artifacts
+*.log
+*.env

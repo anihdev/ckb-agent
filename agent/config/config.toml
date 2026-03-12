@@ -1,0 +1,13 @@
+[risk]
+warning_ltv = 70
+critical_ltv = 80
+max_repay_per_action = 1000
+poll_interval_seconds = 300
+
+[agent]
+max_spend_per_tx = 1000
+allowed_contracts = []
+
+[network]
+ckb_rpc = "https://testnet.ckb.dev"
+indexer_rpc = "https://testnet.ckb.dev/indexer"
