@@ -1,11 +1,17 @@
 # Rust
 /target/
-/**/target/           # if there are multiple crates
-/Cargo.lock           # if you prefer not to track it
+/**/target/
+contracts/target/
+contracts/build/
+build/
+**/*.rlib
+**/*.so
+/Cargo.lock
+contracts/Cargo.lock
 
 # Node / TypeScript
 /node_modules/
-agent/node_modules/   # or simply **/node_modules/
+agent/node_modules/
 npm-debug.log*
 yarn-error.log*
 /dist/
