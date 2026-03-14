@@ -1,0 +1,18 @@
+[workspace]
+members = [
+    "tests",
+    "contracts/collateral-contract",
+    "contracts/price-oracle",
+    "contracts/lock-script",
+]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+overflow-checks = true
+strip = true
+opt-level = 's'
+lto = false
+codegen-units = 1
+panic = "abort"
