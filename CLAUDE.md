@@ -29,9 +29,16 @@ Contracts compile to `riscv64imac-unknown-none-elf` via Docker image `nervos/ckb
 ```bash
 cd agent
 npm install
-npx ts-node src/index.ts    # Run agent directly
-npx tsc                      # Type-check / compile
+npx tsc                                          # Type-check / compile
+node --loader ts-node/esm src/index.ts           # Run agent (main loop)
+node --loader ts-node/esm src/index.ts --simulate  # Simulate mode (no on-chain txs)
+node --loader ts-node/esm src/deploy.ts          # Deploy contracts to testnet
+node --loader ts-node/esm src/seed.ts            # Create sample positions on-chain
+node --loader ts-node/esm src/seed-one.ts        # Create a single CRITICAL position
+node --loader ts-node/esm src/set-price.ts       # Set oracle price cell on-chain
 ```
+
+The agent is ESM (`"type": "module"` in package.json). All local imports must use `.js` extensions (e.g., `import { foo } from './bar.js'`). Use `node --loader ts-node/esm` instead of `npx ts-node` for running scripts.
 
 ## Architecture
 
@@ -41,9 +48,9 @@ npx tsc                      # Type-check / compile
 
 | Bytes | Field |
 |-------|-------|
-| 0–8   | Collateral amount (CKB shannons) |
-| 8–16  | Borrowed amount (RUSD units) |
-| 16–24 | Owner lock hash (8-byte identifier) |
+| 0–8   | Collateral amount (CKB shannons, u64 LE) |
+| 8–16  | Borrowed amount (RUSD units, u64 LE) |
+| 16–24 | Owner lock hash (8-byte identifier, u64 LE) |
 
 Validation logic (`entry.rs`):
 - Owner identifier from script args (minimum 8 bytes)
@@ -55,28 +62,24 @@ Validation logic (`entry.rs`):
 
 ### Agent (`agent/src/`)
 
-`index.ts` drives the main loop:
-1. `fetcher.ts` — fetches positions from the CKB indexer RPC
-2. `classifier.ts` — classifies each position as SAFE / WARNING / CRITICAL
-3. `rebalancer.ts` — triggers rebalancing for non-safe positions
-4. `reporter.ts` — generates JSON reports
+**Main loop** (`index.ts`): poll → fetch → classify → rebalance → report → sleep.
 
-Most agent modules are currently stubs pending implementation.
+- `config.ts` — Loads all config from `.env` vars + `--simulate` CLI flag. Required env vars: `CKB_RPC_URL`, `CKB_INDEXER_URL`, `AGENT_PRIVATE_KEY`. Optional: `COLLATERAL_CONTRACT_TX_HASH`, `PRICE_ORACLE_TX_HASH`, `LOCK_SCRIPT_TX_HASH`, `COLLATERAL_CODE_HASH`, `MAX_SPEND_PER_TX`, `WARNING_LTV`, `CRITICAL_LTV`, `POLL_INTERVAL_SECONDS`.
+- `fetcher.ts` — Queries on-chain cells via `@ckb-ccc/core` `findCells` (prefix-matching type script by `COLLATERAL_CODE_HASH`). Falls back to hardcoded mock positions when no contract is deployed.
+- `classifier.ts` — Computes LTV from collateral value (shannons → CKB × price÷1000) vs borrowed RUSD. Classifies as SAFE / WARNING / CRITICAL based on config thresholds.
+- `rebalancer.ts` — Computes repay amounts to bring LTV down to `warningLtv - 10`. Enforces `maxSpendPerTx` lock script check. Records fees and persists actions to SQLite.
+- `reporter.ts` — Writes terminal snapshot + `reports/latest.html` with position dashboard.
+- `db.ts` — SQLite via `better-sqlite3`. Tables: `positions` (action log), `agent_runs` (run metadata). DB file: `agent/guardian.db`.
+- `fees.ts` — Tracks 1 CKB per protective action in a `fees` table. Batches settlement at 65 CKB threshold (CKB cell minimum).
+- `deploy.ts` — Deploys compiled contract binaries from `contracts/build/release/` to CKB testnet. Reads binaries, creates data cells, outputs tx hashes for `.env`.
+- `seed.ts` / `seed-one.ts` — Creates sample collateral position cells on testnet for testing.
+- `set-price.ts` — Creates a price oracle cell (24 bytes: price×1000 + timestamp + sequence).
 
-**Key libraries:** `@ckb-lumos/lumos` v0.23 (transaction building), `axios` (RPC), `better-sqlite3` (state persistence), `dotenv`.
+**Key library:** `@ckb-ccc/core` (not `@ckb-lumos/lumos`) for transaction building, signing, and cell queries. Uses `ccc.ClientPublicTestnet`, `ccc.SignerCkbPrivateKey`, `ccc.Transaction`.
 
-### Configuration (`agent/config/config.toml`)
+### Configuration
 
-```toml
-[risk]
-warning_ltv = 70        # Warning threshold (%)
-critical_ltv = 80       # Critical threshold / enforcement limit (%)
-poll_interval_seconds = 300
-
-[network]
-ckb_rpc = "https://testnet.ckb.dev"
-indexer_rpc = "https://testnet.ckb.dev/indexer"
-```
+The agent reads configuration from environment variables (`.env` file via `dotenv`). The `agent/config/config.toml` file exists as a reference but is **not parsed** by the agent — all runtime config comes from env vars.
 
 ## CKB-Specific Notes
 
@@ -84,3 +87,5 @@ indexer_rpc = "https://testnet.ckb.dev/indexer"
 - Use `ckb-std` for cell loading, script access, and error handling.
 - Tests use `ckb-testtool` to build and verify transactions locally without a running node.
 - Cell capacity is a hard constraint — always verify positions meet the 61 CKB minimum.
+- Position data encoding is always 24 bytes of u64 little-endian values. Both the contract (`read_u64`) and agent (`readU64LE`) use the same layout — keep them in sync.
+- Contract errors are `#[repr(i8)]` starting at 10 for custom errors (10=InvalidArgs, 11=InvalidDataSize, 12=LTVExceeded, etc.).

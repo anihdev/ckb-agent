@@ -1,16 +1,23 @@
 {
-  "name": "agent",
+  "name": "ckb-position-guardian",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Autonomous DeFi risk guardian agent for CKB",
+  "main": "dist/index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "start": "node --loader ts-node/esm src/index.ts",
+    "dev": "node --loader ts-node/esm src/index.ts",
+    "simulate": "node --loader ts-node/esm src/index.ts --simulate",
+    "deploy": "node --loader ts-node/esm src/deploy.ts",
+    "seed": "node --loader ts-node/esm src/seed.ts",
+    "seed-one": "node --loader ts-node/esm src/seed-one.ts",
+    "set-price": "node --loader ts-node/esm src/set-price.ts",
+    "demo-connection": "node --loader ts-node/esm src/demo-connection.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@ckb-lumos/lumos": "^0.23.0",
+    "@ckb-ccc/core": "^1.9.0",
+    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^25.5.0",
     "axios": "^1.13.6",
     "better-sqlite3": "^12.6.2",

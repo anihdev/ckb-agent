@@ -3,6 +3,7 @@
 /**/target/
 contracts/target/
 contracts/build/
+/contracts/.git.backup/
 build/
 **/*.rlib
 **/*.so

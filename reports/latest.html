@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CKB Position Guardian</title>
+  <style>
+    body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 2rem; }
+    h1 { color: #58a6ff; }
+    .position { border: 1px solid #30363d; padding: 1rem; margin: 1rem 0; border-radius: 6px; }
+    .SAFE { border-left: 4px solid #3fb950; }
+    .WARNING { border-left: 4px solid #d29922; }
+    .CRITICAL { border-left: 4px solid #f85149; }
+    .label { color: #8b949e; font-size: 0.85rem; }
+    .value { color: #e6edf3; font-weight: bold; }
+    .action { background: #161b22; padding: 0.5rem; margin-top: 0.5rem; border-radius: 4px; }
+    footer { margin-top: 2rem; color: #8b949e; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <h1>🛡️ CKB Position Guardian</h1>
+  <p class="label">Last Run: 2026-03-19T07:53:53.869Z</p>
+  <p class="label">Positions: 3 | Actions: 2</p>
+  
+  <div class="position CRITICAL">
+    <div><span class="label">Owner</span><br><span class="value">0x4433221100000000</span></div>
+    <div><span class="label">Collateral</span><br><span class="value">3000.00 CKB</span></div>
+    <div><span class="label">Borrowed</span><br><span class="value">72 RUSD</span></div>
+    <div><span class="label">LTV</span><br><span class="value">160.0%</span></div>
+    <div><span class="label">Risk</span><br><span class="value">🚨 CRITICAL</span></div>
+    
+    <div class="action">
+      <span class="label">Action:</span> Repay <b>45 RUSD</b><br>
+      <span class="label">Projected LTV:</span> 60.0% → SAFE<br>
+      <span class="label">Lock Script:</span> ✅ Verified
+    </div>
+  </div>
+  <div class="position SAFE">
+    <div><span class="label">Owner</span><br><span class="value">0x3412cdab00000000</span></div>
+    <div><span class="label">Collateral</span><br><span class="value">12000.00 CKB</span></div>
+    <div><span class="label">Borrowed</span><br><span class="value">40 RUSD</span></div>
+    <div><span class="label">LTV</span><br><span class="value">22.0%</span></div>
+    <div><span class="label">Risk</span><br><span class="value">✅ SAFE</span></div>
+    
+  </div>
+  <div class="position WARNING">
+    <div><span class="label">Owner</span><br><span class="value">0x907856ef00000000</span></div>
+    <div><span class="label">Collateral</span><br><span class="value">5000.00 CKB</span></div>
+    <div><span class="label">Borrowed</span><br><span class="value">55 RUSD</span></div>
+    <div><span class="label">LTV</span><br><span class="value">73.0%</span></div>
+    <div><span class="label">Risk</span><br><span class="value">⚠️  WARNING</span></div>
+    
+    <div class="action">
+      <span class="label">Action:</span> Repay <b>10 RUSD</b><br>
+      <span class="label">Projected LTV:</span> 59.7% → SAFE<br>
+      <span class="label">Lock Script:</span> ✅ Verified
+    </div>
+  </div>
+  <footer>CKB Position Guardian · Powered by CKB lock scripts + Fiber Network</footer>
+</body>
+</html>

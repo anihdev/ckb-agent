@@ -1,26 +1,26 @@
-// use ckb_std::error::SysError;
+use ckb_std::error::SysError;
 
-// /// Error
-// #[repr(i8)]
-// pub enum Error {
-//     IndexOutOfBound = 1,
-//     ItemMissing,
-//     LengthNotEnough,
-//     Encoding,
-//     // Add customized errors here...
-//     MyError,
-// }
+#[repr(i8)]
+pub enum Error {
+    IndexOutOfBound = 1,
+    ItemMissing,
+    LengthNotEnough,
+    Encoding,
+    // Lock script specific errors
+    InvalidArgs          = 10,
+    MissingSignature     = 11,
+    SpendLimitExceeded   = 12,
+    UnauthorizedContract = 13,
+}
 
-// impl From<SysError> for Error {
-//     fn from(err: SysError) -> Self {
-//         use SysError::*;
-//         match err {
-//             IndexOutOfBound => Self::IndexOutOfBound,
-//             ItemMissing => Self::ItemMissing,
-//             LengthNotEnough(_) => Self::LengthNotEnough,
-//             Encoding => Self::Encoding,
-//             Unknown(err_code) => panic!("unexpected sys error {}", err_code),
-//         }
-//     }
-// }
-
+impl From<SysError> for Error {
+    fn from(err: SysError) -> Self {
+        match err {
+            SysError::IndexOutOfBound    => Self::IndexOutOfBound,
+            SysError::ItemMissing        => Self::ItemMissing,
+            SysError::LengthNotEnough(_) => Self::LengthNotEnough,
+            SysError::Encoding           => Self::Encoding,
+            SysError::Unknown(_)         => Self::Encoding,
+        }
+    }
+}
