@@ -5,6 +5,7 @@ import { generateReport } from './reporter.js';
 import { loadConfig } from './config.js';
 import { initDb, closeDb, saveRun } from './db.js';
 import { printFeeStatus } from './fees.js';
+import { printFiberStatus } from './fiber.js';
 
 let iterationCount = 0;
 let isShuttingDown = false;
@@ -75,6 +76,7 @@ async function main() {
 
       generateReport(positions, actions);
       printFeeStatus();
+      await printFiberStatus(config.fiberRpcUrl);
 
     } catch (err) {
       errors++;

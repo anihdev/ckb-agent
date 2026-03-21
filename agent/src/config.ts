@@ -14,6 +14,7 @@ export interface Config {
   warningLtv: number;
   criticalLtv: number;
   simulate: boolean;
+  fiberRpcUrl: string;
 }
 
 export function loadConfig(): Config {
@@ -41,6 +42,7 @@ export function loadConfig(): Config {
     maxSpendPerTx:            BigInt(process.env.MAX_SPEND_PER_TX || '100000000000'),
     warningLtv:               parseInt(process.env.WARNING_LTV || '70'),
     criticalLtv:              parseInt(process.env.CRITICAL_LTV || '80'),
-    simulate:                 process.argv.includes('--simulate'),
+    fiberRpcUrl: process.env.FIBER_RPC_URL || "http://127.0.0.1:8227",
+    simulate: process.argv.includes('--simulate'),
   };
 }

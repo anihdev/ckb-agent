@@ -46,7 +46,7 @@ The system has two layers: **on-chain smart contracts** (Rust, RISC-V) that enfo
   │  engine  │     │   check      │
   └────┬─────┘     └──────────────┘
        │
-       ├──▶ Record fee (1 CKB per action → fees table)
+       ├──▶ Settle fee (1 CKB → Fiber micropayment or L1 batch)
        ├──▶ Save action to DB (positions table)
        ▼
   ┌──────────┐     ┌────────────────┐
@@ -74,10 +74,11 @@ The system has two layers: **on-chain smart contracts** (Rust, RISC-V) that enfo
 3. If valid: execute repayment, record 1 CKB fee, log to SQLite
 4. If blocked: log `BLOCKED_BY_LOCK_SCRIPT`, skip action
 
-**Fee Settlement Flow:**
-1. Each protective action accrues a 1 CKB fee in the `fees` table
-2. Fees accumulate until reaching the 65 CKB settlement threshold (CKB cell minimum)
-3. At threshold, fees are eligible for batch settlement to L1 via Fiber Network
+**Fee Settlement Flow (Dual-Path):**
+1. Each protective action triggers a 1 CKB fee
+2. **Fiber path (preferred):** If a local Fiber node is running, the fee is sent instantly via `send_payment` through an open payment channel — no threshold, no batching
+3. **L1 fallback:** If Fiber is unavailable, fees accumulate in the `fees` table until reaching the 65 CKB settlement threshold (CKB cell minimum), then batch-settle on-chain
+4. The `fiber_settled` column in the fees table tracks which path each fee took
 
 **Graceful Shutdown:**
 - SIGINT / SIGTERM triggers orderly shutdown: finish current iteration, close DB, exit cleanly
@@ -109,6 +110,7 @@ The system has two layers: **on-chain smart contracts** (Rust, RISC-V) that enfo
 | `better-sqlite3` ^12.6.2 | Local persistence for position history, run metadata, fee tracking |
 | `dotenv` ^17.3.1 | Environment variable loading from `.env` |
 | `ts-node` ^10.9.2 | TypeScript execution without pre-compilation |
+| `axios` ^1.13.6 | HTTP client for Fiber Network JSON-RPC calls |
 
 ### Smart Contract Stack
 
@@ -142,9 +144,13 @@ The system has two layers: **on-chain smart contracts** (Rust, RISC-V) that enfo
 
 ### Fiber Network (Fee Settlement Layer)
 
-- The agent accumulates 1 CKB fees per protective action in a local `fees` table
-- Fees batch to L1 at a 65 CKB threshold (CKB cell minimum capacity constraint)
-- Settlement is designed around Fiber Network for off-chain batching before on-chain finalization
+- **`fiber.ts`** — Full Fiber Network integration via JSON-RPC (`axios`). Manages the complete channel lifecycle:
+  - `checkFiberAvailable()` — probes the local Fiber node on startup
+  - `connectToPeer()` → `getPeerPubkey()` — connects to the testnet peer, resolves its secp256k1 node pubkey from `list_peers` (not the libp2p peer ID)
+  - `ensureChannelOpen()` — finds an existing `CHANNEL_READY` channel or opens a new one (200 CKB funding, polls for L1 confirmation)
+  - `sendFiberPayment()` — sends 1 CKB per protective action via `send_payment` using the resolved pubkey
+- **`fees.ts`** — Dual-path fee settlement: Fiber-first (instant, per-action) with L1 batch fallback (65 CKB threshold). The `fiber_settled` column in SQLite tracks which path each fee took
+- **Graceful degradation:** When no Fiber node is running, the agent logs the fallback status and operates normally via L1 batching — no crashes, no code branches to disable
 
 ---
 
@@ -169,8 +175,8 @@ The collateral contract (Rust, RISC-V) provides the hard safety net:
 - Enforces minimum 61 CKB cell capacity
 - Handles both update and close/repay paths
 
-### Fee Tracking and Batch Settlement
-Each protective action records a 1 CKB fee. Fees accumulate in SQLite until reaching the 65 CKB threshold (minimum CKB cell capacity), at which point they're eligible for batch settlement via Fiber Network.
+### Dual-Path Fee Settlement (Fiber + L1)
+Each protective action triggers a 1 CKB fee. The agent first attempts instant settlement via a Fiber Network micropayment channel (`send_payment`). If no Fiber node is running, fees fall back to L1 batch accumulation in SQLite until reaching the 65 CKB threshold (minimum CKB cell capacity). The `fiber_settled` column in the fees table provides a complete audit of which settlement path each fee took.
 
 ### Persistent Audit Trail
 All position snapshots, agent actions, and run metadata are recorded in SQLite (`guardian.db`):
@@ -197,8 +203,8 @@ Extend the 24-byte cell data format to support multiple collateral types (e.g., 
 ### Real Price Oracle Integration
 Replace the stub oracle with a decentralized price feed (e.g., Band Protocol or a CKB-native oracle network). Add staleness checks (reject prices older than N blocks) and multi-source aggregation.
 
-### Fiber Network Live Settlement
-Complete the Fiber Network integration for fee settlement — open payment channels, batch micro-fees off-chain, and settle to L1 periodically. This would dramatically reduce on-chain fee overhead.
+### Fiber Node Provisioning
+The Fiber integration code (`fiber.ts`) is complete — peer connection, channel lifecycle, and micropayment sending all work via JSON-RPC. The remaining step is node provisioning: generating an encrypted CKB wallet key (scrypt + AES-256-GCM) for the Fiber node's on-chain funding. Once provisioned, fees settle instantly per-action instead of batching to 65 CKB.
 
 ### Liquidation Auctions
 When a position crosses a liquidation threshold (e.g., 90% LTV) and the borrower hasn't responded, trigger an on-chain Dutch auction for the collateral. The agent would orchestrate the auction lifecycle.
@@ -226,9 +232,10 @@ CKB's Cell Model makes this architecture more robust than EVM alternatives:
 - **Cell data as structured storage:** The 24-byte position format is self-contained in each cell, enabling efficient indexer queries without contract state reads
 
 ### Revenue Model
-The 1 CKB per-action fee model (batched at 65 CKB via Fiber) creates sustainable agent economics:
+The 1 CKB per-action fee model creates sustainable agent economics:
 - Operators earn fees proportional to protective actions taken
-- The 65 CKB batching threshold aligns with CKB's cell capacity constraint
+- **With Fiber:** Fees settle instantly per-action — no batching delay, no 65 CKB minimum
+- **Without Fiber:** Fees batch on L1 at the 65 CKB cell capacity threshold
 - As positions scale, fee revenue scales linearly with monitoring activity
 
 ### Path to Production

@@ -29,13 +29,14 @@ Contracts compile to `riscv64imac-unknown-none-elf` via Docker image `nervos/ckb
 ```bash
 cd agent
 npm install
-npx tsc                                          # Type-check / compile
-node --loader ts-node/esm src/index.ts           # Run agent (main loop)
-node --loader ts-node/esm src/index.ts --simulate  # Simulate mode (no on-chain txs)
-node --loader ts-node/esm src/deploy.ts          # Deploy contracts to testnet
-node --loader ts-node/esm src/seed.ts            # Create sample positions on-chain
-node --loader ts-node/esm src/seed-one.ts        # Create a single CRITICAL position
-node --loader ts-node/esm src/set-price.ts       # Set oracle price cell on-chain
+npm run build          # Type-check / compile (tsc)
+npm run start          # Run agent (live mode)
+npm run simulate       # Run agent (no on-chain txs)
+npm run deploy         # Deploy contracts to testnet
+npm run seed           # Create 3 sample positions on-chain (SAFE/WARNING/CRITICAL)
+npm run seed-one       # Create a single CRITICAL position
+npm run set-price      # Set oracle price cell on-chain
+npm run demo-connection  # Verify live testnet connectivity
 ```
 
 The agent is ESM (`"type": "module"` in package.json). All local imports must use `.js` extensions (e.g., `import { foo } from './bar.js'`). Use `node --loader ts-node/esm` instead of `npx ts-node` for running scripts.
@@ -64,22 +65,34 @@ Validation logic (`entry.rs`):
 
 **Main loop** (`index.ts`): poll → fetch → classify → rebalance → report → sleep.
 
-- `config.ts` — Loads all config from `.env` vars + `--simulate` CLI flag. Required env vars: `CKB_RPC_URL`, `CKB_INDEXER_URL`, `AGENT_PRIVATE_KEY`. Optional: `COLLATERAL_CONTRACT_TX_HASH`, `PRICE_ORACLE_TX_HASH`, `LOCK_SCRIPT_TX_HASH`, `COLLATERAL_CODE_HASH`, `MAX_SPEND_PER_TX`, `WARNING_LTV`, `CRITICAL_LTV`, `POLL_INTERVAL_SECONDS`.
+- `config.ts` — Loads all config from `.env` vars + `--simulate` CLI flag. Required env vars: `CKB_RPC_URL`, `CKB_INDEXER_URL`, `AGENT_PRIVATE_KEY`. Optional: `COLLATERAL_CONTRACT_TX_HASH`, `PRICE_ORACLE_TX_HASH`, `LOCK_SCRIPT_TX_HASH`, `COLLATERAL_CODE_HASH`, `MAX_SPEND_PER_TX`, `WARNING_LTV`, `CRITICAL_LTV`, `POLL_INTERVAL_SECONDS`, `FIBER_RPC_URL`.
 - `fetcher.ts` — Queries on-chain cells via `@ckb-ccc/core` `findCells` (prefix-matching type script by `COLLATERAL_CODE_HASH`). Falls back to hardcoded mock positions when no contract is deployed.
 - `classifier.ts` — Computes LTV from collateral value (shannons → CKB × price÷1000) vs borrowed RUSD. Classifies as SAFE / WARNING / CRITICAL based on config thresholds.
 - `rebalancer.ts` — Computes repay amounts to bring LTV down to `warningLtv - 10`. Enforces `maxSpendPerTx` lock script check. Records fees and persists actions to SQLite.
 - `reporter.ts` — Writes terminal snapshot + `reports/latest.html` with position dashboard.
 - `db.ts` — SQLite via `better-sqlite3`. Tables: `positions` (action log), `agent_runs` (run metadata). DB file: `agent/guardian.db`.
-- `fees.ts` — Tracks 1 CKB per protective action in a `fees` table. Batches settlement at 65 CKB threshold (CKB cell minimum).
+- `fees.ts` — Tracks 1 CKB per protective action in a `fees` table. Attempts instant settlement via Fiber Network micropayment channel; falls back to batch accumulation at 65 CKB threshold (CKB cell minimum) when Fiber node is unavailable.
+- `fiber.ts` — Fiber Network integration for off-chain fee settlement. Manages peer connection, payment channel lifecycle, and micropayments via JSON-RPC (`send_payment`). Resolves peer pubkeys from `list_peers` after connecting. Uses `axios` for RPC calls.
 - `deploy.ts` — Deploys compiled contract binaries from `contracts/build/release/` to CKB testnet. Reads binaries, creates data cells, outputs tx hashes for `.env`.
 - `seed.ts` / `seed-one.ts` — Creates sample collateral position cells on testnet for testing.
 - `set-price.ts` — Creates a price oracle cell (24 bytes: price×1000 + timestamp + sequence).
 
-**Key library:** `@ckb-ccc/core` (not `@ckb-lumos/lumos`) for transaction building, signing, and cell queries. Uses `ccc.ClientPublicTestnet`, `ccc.SignerCkbPrivateKey`, `ccc.Transaction`.
+**Key libraries:**
+- `@ckb-ccc/core` (not `@ckb-lumos/lumos`) for transaction building, signing, and cell queries. Uses `ccc.ClientPublicTestnet`, `ccc.SignerCkbPrivateKey`, `ccc.Transaction`.
+- `axios` for Fiber Network JSON-RPC calls.
 
 ### Configuration
 
 The agent reads configuration from environment variables (`.env` file via `dotenv`). The `agent/config/config.toml` file exists as a reference but is **not parsed** by the agent — all runtime config comes from env vars.
+
+## Deployed Contracts (CKB Testnet / Pudge)
+
+| Contract | TX Hash |
+|----------|---------|
+| Collateral Contract | `0x402b4eed3167018ff92d1dd12cfe2baefbfb33c7fad06895817cd7690ac8fe11` |
+| Price Oracle | `0x41ae343b70b74a46d543376204812f68f5f147164fa92b0efc52e0c1ca243544` |
+| Lock Script | `0xf4129d0a27e59a1ba863ca75d75a56a9875785ced568fd00050aea60634821b1` |
+| Price Data Cell | `0x93b70247afe4a4393e476c9d00d04e7b7ad924da8cd75f4ca5c5dae5508e66de` |
 
 ## CKB-Specific Notes
 

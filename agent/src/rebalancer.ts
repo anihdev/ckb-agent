@@ -1,7 +1,7 @@
 import { Config } from './config.js';
 import { Position } from './classifier.js';
 import { savePosition } from './db.js';
-import { recordFee, checkSettlementReady } from './fees.js';
+import { recordAndSettleFee, checkSettlementReady } from './fees.js';
 
 export interface RebalanceAction {
   owner: string;
@@ -24,10 +24,7 @@ function computeProjectedLtv(position: Position, repayAmount: bigint): number {
   return Number(newBorrowed) * position.ltv / Number(position.borrowed);
 }
 
-export async function rebalance(
-  position: Position,
-  config: Config
-): Promise<RebalanceAction | null> {
+export async function rebalance(position: Position, config: Config): Promise<RebalanceAction | null> {
   const targetLtv = config.warningLtv - 10;
   const repayAmount = computeRepayAmount(position, targetLtv);
   const projectedLtv = computeProjectedLtv(position, repayAmount);
@@ -65,10 +62,13 @@ export async function rebalance(
 
   action.executed = true;
 
-  // Record fee for this protective action
-  recordFee(position.owner, `REPAY_${repayAmount}_RUSD`);
+  // Record fee — tries Fiber first, falls back to batch accumulation
+  await recordAndSettleFee(
+    position.owner,
+    `REPAY_${repayAmount}_RUSD`,
+    config.fiberRpcUrl
+  );
 
-  // Check if we've hit settlement threshold
   const settlement = checkSettlementReady();
   console.log(`[REBALANCER]    Fee status: ${settlement.message}`);
 
