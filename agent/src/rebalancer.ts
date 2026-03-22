@@ -2,6 +2,8 @@ import { Config } from './config.js';
 import { Position } from './classifier.js';
 import { savePosition } from './db.js';
 import { recordAndSettleFee, checkSettlementReady } from './fees.js';
+import Database from 'better-sqlite3';
+import path from 'path';
 
 export interface RebalanceAction {
   owner: string;
@@ -24,6 +26,22 @@ function computeProjectedLtv(position: Position, repayAmount: bigint): number {
   return Number(newBorrowed) * position.ltv / Number(position.borrowed);
 }
 
+function wasRecentlyActedOn(owner: string, withinMinutes = 10): boolean {
+  try {
+    const db = new Database(path.join(process.cwd(), 'guardian.db'));
+    const cutoff = Date.now() - withinMinutes * 60 * 1000;
+    const row = db.prepare(`
+      SELECT id FROM positions
+      WHERE owner = ? AND timestamp > ? AND action_taken != 'NONE'
+      LIMIT 1
+    `).get(owner, cutoff) as { id: number } | undefined;
+    db.close();
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
 export async function rebalance(position: Position, config: Config): Promise<RebalanceAction | null> {
   const targetLtv = config.warningLtv - 10;
   const repayAmount = computeRepayAmount(position, targetLtv);
@@ -42,7 +60,7 @@ export async function rebalance(position: Position, config: Config): Promise<Reb
 
   const repayInShannons = repayAmount * 1_000_000n;
   if (repayInShannons > config.maxSpendPerTx) {
-    console.log(`[REBALANCER] ⛔ Blocked by lock script: ${repayInShannons} > max ${config.maxSpendPerTx}`);
+    console.log(`[REBALANCER] Blocked by lock script: ${repayInShannons} > max ${config.maxSpendPerTx}`);
     savePosition({
       owner: position.owner,
       collateral: position.collateral.toString(),
@@ -53,6 +71,11 @@ export async function rebalance(position: Position, config: Config): Promise<Reb
       timestamp: Date.now(),
     });
     return action;
+  }
+
+  if (!config.simulate && wasRecentlyActedOn(position.owner)) {
+    console.log(`[REBALANCER] Skipping ${position.owner.slice(0, 12)}... — acted within last 10 minutes`);
+    return null;
   }
 
   const mode = config.simulate ? 'SIMULATE' : 'Simulating';

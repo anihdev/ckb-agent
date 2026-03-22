@@ -6,6 +6,7 @@ import { loadConfig } from './config.js';
 import { initDb, closeDb, saveRun } from './db.js';
 import { printFeeStatus } from './fees.js';
 import { printFiberStatus } from './fiber.js';
+import { runStartupHealthCheck } from './health.js';
 
 let iterationCount = 0;
 let isShuttingDown = false;
@@ -26,7 +27,7 @@ function setupShutdownHandlers() {
     process.exit(0);
   };
 
-  process.on('SIGINT',  () => shutdown('SIGINT'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('uncaughtException', (err) => {
     console.error(`[${new Date().toISOString()}] Uncaught exception:`, err);
@@ -42,6 +43,7 @@ async function main() {
   console.log(`[${new Date().toISOString()}] 🛡️  CKB Position Guardian starting...`);
   console.log(`[${new Date().toISOString()}] Mode: ${config.simulate ? 'SIMULATE' : 'LIVE'}`);
   console.log(`[${new Date().toISOString()}] Poll interval: ${config.pollIntervalSeconds}s`);
+  await runStartupHealthCheck(config);
   console.log(`[${new Date().toISOString()}] Max spend per tx: ${config.maxSpendPerTx} shannons`);
 
   while (!isShuttingDown) {

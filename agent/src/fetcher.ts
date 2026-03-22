@@ -43,10 +43,24 @@ async function fetchCurrentPrice(config: Config): Promise<bigint> {
       return 15n;
     }
     console.log(`[FETCHER] Oracle price: $${Number(price) / 1000} per CKB`);
+    // Warn if the oracle timestamp is stale
+    try { checkOracleStaleness(bytes); } catch (e) { /* non-fatal */ }
     return price;
   } catch {
     console.log(`[FETCHER] Oracle fetch failed, using mock price`);
     return 15n;
+  }
+}
+
+export function checkOracleStaleness(data: Uint8Array): void {
+  if (data.length < 16) return;
+  // Oracle layout: price (8 bytes LE) | timestamp (8 bytes LE) | seq (8 bytes)
+  const timestamp = readU64LE(data, 8);
+  const ageMs = Date.now() - Number(timestamp);
+  if (ageMs < 0) return; // timestamp in future — ignore
+  const ageHours = ageMs / 3_600_000;
+  if (ageHours > 1) {
+    console.warn(`[FETCHER] ⚠️  Oracle price is ${ageHours.toFixed(1)}h old — consider running npm run set-price`);
   }
 }
 
@@ -85,7 +99,7 @@ export async function fetchPositions(config: Config): Promise<Position[]> {
 
         const { ltv, risk } = classifyRisk(collateral, borrowed, ckbPrice, config);
         positions.push({ owner, collateral, borrowed, ltv, risk });
-        console.log(`[FETCHER] Found position: owner=${owner} collateral=${Number(collateral)/1e8}CKB borrowed=${borrowed}RUSD`);
+        console.log(`[FETCHER] Found position: owner=${owner} collateral=${Number(collateral) / 1e8}CKB borrowed=${borrowed}RUSD`);
       } catch {
         console.warn(`[FETCHER] Failed to parse cell`);
       }
@@ -101,7 +115,18 @@ export async function fetchPositions(config: Config): Promise<Position[]> {
     return mockPositions(config, ckbPrice);
   }
 
-  return positions;
+  // Deduplicate by owner — keep the first cell found per owner
+  const seen = new Set<string>();
+  const unique = positions.filter(p => {
+    if (seen.has(p.owner)) return false;
+    seen.add(p.owner);
+    return true;
+  });
+  if (unique.length < positions.length) {
+    console.log(`[FETCHER] Deduplicated: ${positions.length} cells → ${unique.length} unique owners`);
+  }
+
+  return unique;
 }
 
 function mockPositions(config: Config, ckbPrice: bigint): Position[] {

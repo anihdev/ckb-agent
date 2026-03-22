@@ -96,7 +96,7 @@ The system has two layers: **on-chain smart contracts** (Rust, RISC-V) that enfo
 | **Node.js** | v20.19.6 |
 | **TypeScript** | 5.9.3 (ESM, `node16` module resolution) |
 | **Runtime** | `node --loader ts-node/esm` (no build step required) |
-| **Rust** | Stable + `riscv64imac-unknown-none-elf` target (via Docker) |
+| **Rust** | 1.94.0 Stable + `riscv64imac-unknown-none-elf` target (via Docker) |
 | **Capsule** | v0.10.4+ (CKB contract build framework) |
 | **Docker** | `nervos/ckb-riscv-gnu-toolchain:focal-20230214` |
 | **Database** | SQLite via `better-sqlite3` (local file: `guardian.db`) |
@@ -197,26 +197,32 @@ The deploy script (`deploy.ts`) checks existing env vars before deploying, suppo
 
 ## 7. Future Functionality
 
+### Fiber Node Activation (immediate)
+Provision the Fiber node CKB wallet key file and activate instant fee settlement. The code is complete — peer connection, channel lifecycle, and micropayment sending all work via JSON-RPC. Only the key file setup remains.
+
+### Live Transaction Execution
+Remove the simulation flag and submit actual repay transactions on-chain. The lock script enforcement, spend calculation, and transaction building are already in place.
+
+### Agent-to-Agent Micropayments
+Pay a dedicated price-feed agent for oracle data via Fiber micropayments — enabling a real agent-to-agent economic relationship on CKB.
+
+### Multi-User Support
+Extend the collateral contract to support multiple independent owners with per-user spending limits encoded in lock script args.
+
 ### Multi-Asset Collateral
 Extend the 24-byte cell data format to support multiple collateral types (e.g., CKB + sUDT tokens). The classifier and rebalancer would compute composite LTV across a basket of assets.
 
-### Real Price Oracle Integration
-Replace the stub oracle with a decentralized price feed (e.g., Band Protocol or a CKB-native oracle network). Add staleness checks (reject prices older than N blocks) and multi-source aggregation.
+### Governance Watching
+Monitor governance proposals that change liquidation parameters and preemptively adjust positions before changes take effect.
 
-### Fiber Node Provisioning
-The Fiber integration code (`fiber.ts`) is complete — peer connection, channel lifecycle, and micropayment sending all work via JSON-RPC. The remaining step is node provisioning: generating an encrypted CKB wallet key (scrypt + AES-256-GCM) for the Fiber node's on-chain funding. Once provisioned, fees settle instantly per-action instead of batching to 65 CKB.
+### Programmable Risk Policies
+Allow users to define risk policies declaratively — the agent interprets and enforces them autonomously.
 
 ### Liquidation Auctions
 When a position crosses a liquidation threshold (e.g., 90% LTV) and the borrower hasn't responded, trigger an on-chain Dutch auction for the collateral. The agent would orchestrate the auction lifecycle.
 
-### Multi-Agent Coordination
-Run multiple guardian agents with different risk appetites and strategies. A coordination layer (on-chain or via Fiber) would prevent duplicate actions and allow agents to bid on protection rights.
-
-### Historical Analytics and Alerting
-Build a web dashboard on top of the SQLite audit trail — historical LTV trends, action frequency, fee revenue. Add webhook/email alerts when positions approach critical thresholds.
-
-### Cross-Chain Position Monitoring
-Extend the agent to monitor CDPs on other UTXO chains via CCC's multi-chain support, creating a unified risk management layer across Nervos ecosystem chains.
+### Configurable Protocol Integration
+Generalize the agent to support arbitrary CKB lending protocols without code changes. Define cell data layouts, risk thresholds, and repay formulas in a protocol config file so any team can point the guardian at their contract. Long-term goal: `npm install ckb-guardian` → write a config → run — no fork required.
 
 ---
 
@@ -225,24 +231,31 @@ Extend the agent to monitor CDPs on other UTXO chains via CCC's multi-chain supp
 ### The Problem is Real
 Collateralized debt positions are the backbone of DeFi lending (MakerDAO, Aave, Compound). Liquidation failures cost protocols hundreds of millions — the March 2020 "Black Thursday" saw MakerDAO lose $8.3M from failed liquidations. Any lending protocol on CKB will need automated position monitoring.
 
+### Business Model
+Pay-per-protection. The agent charges 1 CKB per protective action executed. If no risk is detected, nothing is charged. Fees settle instantly via Fiber Network when available, or batch on L1 when accumulated fees cross the 65 CKB cell minimum threshold. Incentives are perfectly aligned — the agent only earns when it actively protects capital.
+
+At the current CKB price, 1 CKB per action is approximately $0.015. A user with 3–5 interventions per month pays less than $0.10 in fees versus potentially thousands in prevented liquidation losses.
+
+### Target Users
+- Active DeFi users managing mid-to-large collateral positions
+- DAOs with treasury assets in lending protocols
+- Yield aggregators and market makers who cannot monitor positions 24/7
+- Risk-aware funds that need documented, auditable protection actions
+
 ### Why CKB is Uniquely Suited
 CKB's Cell Model makes this architecture more robust than EVM alternatives:
-- **Type scripts as invariant enforcers:** The collateral contract can reject invalid state transitions at the VM level, not just via external keeper bots racing for MEV
+- **Type scripts as invariant enforcers:** The collateral contract rejects invalid state transitions at the VM level, not just via external keeper bots racing for MEV
 - **Lock scripts as spending guards:** The agent's spending authority is cryptographically bounded on-chain, not just by a multisig or governance vote
 - **Cell data as structured storage:** The 24-byte position format is self-contained in each cell, enabling efficient indexer queries without contract state reads
 
-### Revenue Model
-The 1 CKB per-action fee model creates sustainable agent economics:
-- Operators earn fees proportional to protective actions taken
-- **With Fiber:** Fees settle instantly per-action — no batching delay, no 65 CKB minimum
-- **Without Fiber:** Fees batch on L1 at the 65 CKB cell capacity threshold
-- As positions scale, fee revenue scales linearly with monitoring activity
+### Infrastructure Component Value
+Beyond the product use case, CKB Position Guardian demonstrates two reusable primitives the CKB ecosystem needs:
 
-### Path to Production
-1. **Testnet (current):** Core loop proven with deployed contracts and seeded positions
-2. **Mainnet pilot:** Partner with a CKB lending protocol to run alongside their existing liquidation infrastructure
-3. **Multi-protocol:** Generalize the agent to monitor any CKB-based CDP, not just the custom collateral contract
-4. **Infrastructure product:** Offer Position Guardian as a hosted service (monitoring-as-a-service) for CKB DeFi protocols that don't want to run their own keepers
+1. **Lock script as agent permission boundary** — a pattern for any application that wants to delegate spending authority to an autonomous agent with hard on-chain limits. Reusable by any CKB application that involves agents.
+2. **Fee accumulation toward Fiber threshold** — a reusable pattern for any CKB application that needs micropayment fee settlement without breaking against the cell minimum constraint.
 
 ### Competitive Advantage
-Unlike EVM keeper bots that compete in mempool priority auctions (MEV), CKB's cell model allows the guardian agent to operate with on-chain spending authority and guaranteed invariant enforcement. The agent doesn't race against other bots — it operates within a cryptographically defined scope set by the lock script.
+Every competing risk guardian on other chains (Solana, EVM) faces the same fundamental problem: the agent can theoretically exceed its permissions if the off-chain logic is compromised. CKB Position Guardian is the only risk guardian where this is architecturally impossible — the lock script enforces the limit at consensus level. This is not a feature that can be replicated on other chains without a fundamental protocol change.
+
+### Scaling Path
+Start with testnet validation → deploy to mainnet when CKB DeFi protocols launch → expand protocol coverage as ecosystem grows → build agent network where guardians coordinate and pay each other via Fiber → eventually become the default risk infrastructure layer for CKB DeFi.
