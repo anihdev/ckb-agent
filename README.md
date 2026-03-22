@@ -22,6 +22,23 @@ CKB Position Guardian runs headlessly with no human in the loop. Every 5 minutes
 
 ---
 
+## Conventions
+
+### Emoji Usage
+
+Emojis in this project are **intentional visual indicators**, not decoration:
+
+| Emoji | Meaning |
+|-------|---------|
+| 🛡️ | Guardian agent branding |
+| ✅ | `SAFE` - position is healthy |
+| ⚠️ | `WARNING` - position approaching risk threshold |
+| 🚨 | `CRITICAL` - position requires immediate action |
+
+These appear in logs, reports, terminal output, and documentation by design.
+
+---
+
 ## Why CKB
 
 ### Lock Scripts as Agent Permission Boundaries
@@ -304,23 +321,6 @@ Explorer: https://pudge.explorer.nervos.org/transaction/0x402b4eed3167018ff92d1d
 
 ---
 
-## Conventions
-
-### Emoji Usage
-
-Emojis in this project are **intentional visual indicators**, not decoration:
-
-| Emoji | Meaning |
-|-------|---------|
-| 🛡️ | Guardian agent branding |
-| ✅ | `SAFE` - position is healthy |
-| ⚠️ | `WARNING` - position approaching risk threshold |
-| 🚨 | `CRITICAL` - position requires immediate action |
-
-These appear in logs, reports, terminal output, and documentation by design.
-
----
-
 ## Security Design
 
 - Lock script **rejects transactions** exceeding `max_spend_per_tx` at consensus level
@@ -329,6 +329,75 @@ These appear in logs, reports, terminal output, and documentation by design.
 - Price oracle **rejects replayed updates** via sequence number
 - Agent **falls back to mock data** gracefully on network failure — never crashes
 - Agent **closes database cleanly** on SIGINT/SIGTERM — no corruption on server restart
+
+---
+
+## Data Persistence (`guardian.db`)
+
+The agent maintains a local SQLite database at `agent/guardian.db` as a complete audit trail. It is created automatically on first run.
+
+### Schema
+
+**`positions`** — Every position snapshot the agent observed and acted on.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | INTEGER | Auto-increment primary key |
+| `owner` | TEXT | Position owner (lock hash identifier) |
+| `collateral` | TEXT | Collateral amount in shannons |
+| `borrowed` | TEXT | Borrowed amount in RUSD |
+| `ltv` | REAL | Computed loan-to-value ratio |
+| `risk` | TEXT | Classification: `SAFE`, `WARNING`, or `CRITICAL` |
+| `action_taken` | TEXT | Action performed (e.g., `NONE`, `REPAY_10_RUSD`, `REPAY_45_RUSD`) |
+| `timestamp` | INTEGER | Unix timestamp of the snapshot |
+
+**`agent_runs`** — Metadata for each polling iteration.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | INTEGER | Auto-increment primary key |
+| `started_at` | INTEGER | Unix timestamp when the run began |
+| `positions_checked` | INTEGER | Number of positions evaluated |
+| `actions_simulated` | INTEGER | Number of repay actions taken |
+| `errors` | INTEGER | Number of errors encountered |
+
+**`fees`** — Fee records (1 CKB per protective action).
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | INTEGER | Auto-increment primary key |
+| `owner` | TEXT | Position owner who owes the fee |
+| `amount_ckb` | TEXT | Fee amount in CKB |
+| `action` | TEXT | The protective action that triggered the fee |
+| `settled` | INTEGER | `0` = unsettled, `1` = settled (via Fiber or L1 batch) |
+| `timestamp` | INTEGER | Unix timestamp of the fee record |
+
+### Querying
+
+```bash
+sqlite3 agent/guardian.db
+sqlite> .tables
+Type .quit or press Ctrl+D to exit.
+```
+
+```sql
+-- Recent position actions
+SELECT owner, ltv, risk, action_taken, datetime(timestamp, 'unixepoch')
+FROM positions ORDER BY timestamp DESC LIMIT 10;
+
+-- Agent run history
+SELECT datetime(started_at, 'unixepoch'), positions_checked, actions_simulated, errors
+FROM agent_runs ORDER BY started_at DESC;
+
+-- Unsettled fees
+SELECT owner, amount_ckb, action FROM fees WHERE settled = 0;
+
+-- Total fees owed per owner
+SELECT owner, COUNT(*) as actions, SUM(CAST(amount_ckb AS REAL)) as total_ckb
+FROM fees WHERE settled = 0 GROUP BY owner;
+```
+
+The database is closed cleanly on `SIGINT`/`SIGTERM`. To reset it, delete `agent/guardian.db` — it will be recreated on next run.
 
 ---
 
