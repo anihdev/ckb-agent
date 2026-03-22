@@ -14,7 +14,7 @@ function setupShutdownHandlers() {
   const shutdown = (signal: string) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
-    console.log(`\n[${new Date().toISOString()}] 🛑 Received ${signal} — shutting down gracefully...`);
+    console.log(`\n[${new Date().toISOString()}] Received ${signal} — shutting down gracefully...`);
     console.log(`[${new Date().toISOString()}] Total iterations completed: ${iterationCount}`);
     try {
       closeDb();
@@ -29,7 +29,7 @@ function setupShutdownHandlers() {
   process.on('SIGINT',  () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('uncaughtException', (err) => {
-    console.error(`[${new Date().toISOString()}] ❌ Uncaught exception:`, err);
+    console.error(`[${new Date().toISOString()}] Uncaught exception:`, err);
     shutdown('uncaughtException');
   });
 }
@@ -80,12 +80,12 @@ async function main() {
 
     } catch (err) {
       errors++;
-      console.error(`[${new Date().toISOString()}] ❌ Error in iteration #${iterationCount}:`, err);
+      console.error(`[${new Date().toISOString()}] Error in iteration #${iterationCount}:`, err);
     }
 
     saveRun({ started_at: startedAt, positions_checked: positionsChecked, actions_simulated: actionsSimulated, errors });
 
-    // Interruptible sleep — checks shutdown flag every second
+    // Interruptible sleep - checks shutdown flag every second
     for (let i = 0; i < config.pollIntervalSeconds && !isShuttingDown; i++) {
       await sleep(1000);
     }

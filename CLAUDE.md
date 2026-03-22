@@ -94,6 +94,17 @@ The agent reads configuration from environment variables (`.env` file via `doten
 | Lock Script | `0xf4129d0a27e59a1ba863ca75d75a56a9875785ced568fd00050aea60634821b1` |
 | Price Data Cell | `0x93b70247afe4a4393e476c9d00d04e7b7ad924da8cd75f4ca5c5dae5508e66de` |
 
+## Conventions
+
+### Emoji Usage
+
+Emojis in this project are **intentional visual indicators**, not decoration:
+
+- 🛡️ - Guardian agent branding
+- ✅ `SAFE` / ⚠️ `WARNING` / 🚨 `CRITICAL` -- Risk-level classification labels
+
+These appear in logs, reports, terminal output, and documentation by design.
+
 ## CKB-Specific Notes
 
 - Contracts run in the CKB VM (RISC-V), so they must be `no_std` Rust.

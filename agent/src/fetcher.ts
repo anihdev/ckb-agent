@@ -31,8 +31,7 @@ async function fetchCurrentPrice(config: Config): Promise<bigint> {
     const data = tx.transaction.outputsData[0];
     if (!data || data === "0x") return 15n;
     const bytes = ccc.bytesFrom(data);
-    // Sanity check: price data is exactly 24 bytes
-    // Contract binaries are much larger — reject them
+    // check price data is exactly 24 bytes (price + timestamp + sequence)
     if (bytes.length !== 24) {
       console.log(`[FETCHER] Oracle TX is not a price cell, using mock price $0.015`);
       return 15n;

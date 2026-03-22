@@ -43,7 +43,7 @@ export async function recordAndSettleFee(
 ): Promise<void> {
   const database = getDb();
 
-  // Try Fiber first — instant settlement, no threshold
+  // Try Fiber first - instant settlement, no threshold
   if (fiberRpcUrl) {
     const fiberAvailable = await checkFiberAvailable(fiberRpcUrl);
     if (fiberAvailable) {
@@ -63,7 +63,7 @@ export async function recordAndSettleFee(
     }
   }
 
-  // Fallback: batch accumulation toward L1 threshold
+  // Fallback - batch accumulation toward L1 threshold
   database.prepare(`
     INSERT INTO fees (owner, amount_ckb, action, settled, fiber_settled, timestamp)
     VALUES (?, ?, ?, 0, 0, ?)
@@ -72,7 +72,7 @@ export async function recordAndSettleFee(
   console.log(`[FEES] Recorded ${FEE_PER_ACTION_CKB} CKB fee for: ${action}`);
 }
 
-// Keep legacy recordFee for backward compat
+// Keep legacy recordFee for backward compatibility
 export function recordFee(owner: string, action: string): void {
   const database = getDb();
   database.prepare(`
@@ -96,7 +96,7 @@ export function checkSettlementReady(): { ready: boolean; totalCkb: bigint; coun
     return { ready: true, totalCkb: total, count, message: `✅ Ready to settle: ${total} CKB (${count} actions) — L1 threshold met` };
   }
   const remaining = SETTLEMENT_THRESHOLD_CKB - total;
-  return { ready: false, totalCkb: total, count, message: `⏳ Accumulating: ${total}/${SETTLEMENT_THRESHOLD_CKB} CKB (${remaining} until L1 settlement) | ${fiberSettled} settled via Fiber` };
+  return { ready: false, totalCkb: total, count, message: `Accumulating: ${total}/${SETTLEMENT_THRESHOLD_CKB} CKB (${remaining} until L1 settlement) | ${fiberSettled} settled via Fiber` };
 }
 
 export function markFeesSettled(txHash: string): void {

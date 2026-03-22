@@ -32,7 +32,7 @@ export async function checkFiberAvailable(rpcUrl: string): Promise<boolean> {
     console.log(`[FIBER] ✅ Fiber node available at ${rpcUrl}`);
   } catch {
     _fiberAvailable = false;
-    console.log(`[FIBER] ⚠️  Fiber node not running — using batch fallback`);
+    console.log(`[FIBER] ⚠️  Fiber node not running - using batch fallback`);
   }
   return _fiberAvailable;
 }
@@ -87,7 +87,6 @@ export async function ensureChannelOpen(rpcUrl: string): Promise<string | null> 
   try {
     type ChannelEntry = { channel_id: string; state: { state_name: string }; peer_id: string };
     const channels = await fiberRpc(rpcUrl, "list_channels", [{}]) as { channels: ChannelEntry[] };
-    // peer_id in list_channels is the node's secp256k1 pubkey hex (not the libp2p Qm... ID)
     const existing = channels.channels?.find(c => c.state?.state_name === "CHANNEL_READY");
     if (existing) {
       _channelId = existing.channel_id;
@@ -97,10 +96,10 @@ export async function ensureChannelOpen(rpcUrl: string): Promise<string | null> 
     }
     const connected = await connectToPeer(rpcUrl);
     if (!connected) return null;
-    // Resolve the peer's actual node pubkey (secp256k1 hex) for open_channel + send_payment
+    // Resolve the peer's node pubkey for open_channel + send_payment
     _peerPubkey = await getPeerPubkey(rpcUrl);
     if (!_peerPubkey) {
-      console.error(`[FIBER] Could not resolve peer pubkey — is list_peers available?`);
+      console.error(`[FIBER] Could not resolve peer pubkey - is list_peers available?`);
       return null;
     }
     console.log(`[FIBER] Opening payment channel (${Number(MIN_CHANNEL_FUNDING_SHANNONS) / 1e8} CKB)...`);
@@ -109,7 +108,7 @@ export async function ensureChannelOpen(rpcUrl: string): Promise<string | null> 
       funding_amount: `0x${MIN_CHANNEL_FUNDING_SHANNONS.toString(16)}`,
       public: true
     }]);
-    console.log(`[FIBER] Channel opening initiated — waiting for L1 confirmation...`);
+    console.log(`[FIBER] Channel opening initiated - waiting for L1 confirmation...`);
     for (let i = 0; i < 12; i++) {
       await new Promise(r => setTimeout(r, 5000));
       const updated = await fiberRpc(rpcUrl, "list_channels", [{}]) as { channels: ChannelEntry[] };
@@ -120,7 +119,7 @@ export async function ensureChannelOpen(rpcUrl: string): Promise<string | null> 
         return _channelId;
       }
     }
-    console.warn(`[FIBER] Channel not yet ready — will retry next cycle`);
+    console.warn(`[FIBER] Channel not yet ready - will retry next cycle`);
     return null;
   } catch (err) {
     console.error(`[FIBER] Channel error:`, err);
@@ -154,10 +153,10 @@ export async function printFiberStatus(rpcUrl: string): Promise<void> {
   if (status.available) {
     console.log(`[FIBER] Status:  ✅ Node running | ID: ${status.nodeId?.slice(0, 16)}...`);
     if (status.channelId) {
-      console.log(`[FIBER] Channel: ✅ Open — settling fees instantly`);
+      console.log(`[FIBER] Channel: ✅ Open - settling fees instantly`);
       console.log(`[FIBER] Balance: ${status.channelBalance ? Number(status.channelBalance) / 1e8 : 0} CKB`);
     } else {
-      console.log(`[FIBER] Channel: ⏳ Opening — will retry next cycle`);
+      console.log(`[FIBER] Channel: Opening - will retry next cycle`);
     }
   } else {
     console.log(`[FIBER] Status:  ⚠️  Node not running`);

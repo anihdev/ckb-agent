@@ -46,10 +46,7 @@ impl Loader {
         };
         let dir = env::current_dir().unwrap();
         let mut base_path = PathBuf::new();
-        // cargo may use a different cwd when running tests, for example:
-        // when running debug in vscode, it will use workspace root as cwd by default,
-        // when running test by `cargo test`, it will use tests directory as cwd,
-        // so we need a fallback path
+        // cargo may use a different cwd when running tests, so we need a fallback path
         base_path.push("build");
         if !base_path.exists() {
             base_path.pop();

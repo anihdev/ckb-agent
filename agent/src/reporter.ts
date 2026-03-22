@@ -80,5 +80,5 @@ export function generateReport(
 
   const htmlPath = path.join(reportsDir, 'latest.html');
   fs.writeFileSync(htmlPath, html);
-  console.log(`  📄 Report saved → ${htmlPath}\n`);
+  console.log(` Report saved → ${htmlPath}\n`);
 }

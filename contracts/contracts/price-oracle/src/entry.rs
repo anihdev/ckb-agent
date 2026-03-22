@@ -57,7 +57,7 @@ pub fn main() -> Result<(), Error> {
                 return Err(Error::SequenceNotIncremented);
             }
 
-            // Sanity check: reject extreme price movements (oracle manipulation guard)
+            // Sanity check/oracle manipulation guard: reject if price jumps too much compared to previous price
             if prev_price > 0 {
                 let change = if new_price > prev_price {
                     (new_price - prev_price) * 100 / prev_price

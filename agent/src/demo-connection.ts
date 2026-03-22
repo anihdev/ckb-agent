@@ -4,22 +4,22 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-  console.log("🔗 CKB Position Guardian — Live Testnet Connection Demo\n");
+  console.log("CKB Position Guardian — Live Testnet Connection Demo\n");
 
   const RPC_URL = process.env.CKB_RPC_URL || "https://testnet.ckb.dev/rpc";
-  console.log(`📡 Connecting to: ${RPC_URL}`);
+  console.log(` Connecting to: ${RPC_URL}`);
 
   try {
     const client = new ccc.ClientPublicTestnet({ url: RPC_URL });
 
-    // 1. Verify RPC connection
+    // Verify RPC connection
     const tipHeader = await client.getTipHeader();
     console.log(`✅ Connected to CKB Testnet`);
     console.log(`   Tip block: #${parseInt(tipHeader.number.toString(), 16).toLocaleString()}`);
     console.log(`   Block hash: ${tipHeader.hash.slice(0, 20)}...\n`);
 
-    // 2. Verify oracle cell is live
-    console.log(`📊 Verifying deployed contracts:`);
+    // Verify oracle cell is live
+    console.log(`Verifying deployed contracts:`);
     const oracleTxHash = process.env.PRICE_ORACLE_TX_HASH;
     if (oracleTxHash) {
       const oracleTx = await client.getTransaction(oracleTxHash);
@@ -51,7 +51,7 @@ async function main() {
       }
     }
 
-    // 3. Check agent wallet balance
+    // Check agent wallet balance
     console.log(`\n💳 Agent Wallet:`);
     const signer = new ccc.SignerCkbPrivateKey(client, process.env.AGENT_PRIVATE_KEY!);
     const balance = await signer.getBalance();
@@ -59,8 +59,8 @@ async function main() {
     console.log(`   Address: ${address.slice(0, 20)}...`);
     console.log(`   Balance: ${(Number(balance) / 1e8).toFixed(2)} CKB`);
 
-    // 4. Scan for positions
-    console.log(`\n📋 Scanning for collateral positions...`);
+    // Scan for positions
+    console.log(`\n Scanning for collateral positions...`);
     const codeHash = process.env.COLLATERAL_CODE_HASH as `0x${string}`;
     if (codeHash) {
       let positionCount = 0;
@@ -88,7 +88,7 @@ async function main() {
     console.log(`   https://pudge.explorer.nervos.org/transaction/${collateralTxHash}`);
 
   } catch (err) {
-    console.error(`\n❌ Connection error:`, err);
+    console.error(`\n Connection error:`, err);
     process.exit(1);
   }
 }

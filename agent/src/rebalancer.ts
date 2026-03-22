@@ -55,14 +55,14 @@ export async function rebalance(position: Position, config: Config): Promise<Reb
     return action;
   }
 
-  const mode = config.simulate ? '🔵 SIMULATE' : '🟡 Simulating';
+  const mode = config.simulate ? 'SIMULATE' : 'Simulating';
   console.log(`[REBALANCER] ${mode} — repay ${repayAmount} RUSD`);
   console.log(`[REBALANCER]    Projected LTV: ${projectedLtv.toFixed(1)}% → ${projectedRisk}`);
   console.log(`[REBALANCER]    Lock script check: ${repayInShannons} ≤ ${config.maxSpendPerTx} ✅`);
 
   action.executed = true;
 
-  // Record fee — tries Fiber first, falls back to batch accumulation
+  // Record fee - tries Fiber first, falls back to batch accumulation if fiber not available
   await recordAndSettleFee(
     position.owner,
     `REPAY_${repayAmount}_RUSD`,

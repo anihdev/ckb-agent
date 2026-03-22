@@ -3,7 +3,6 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
-import { createHash } from "crypto";
 
 dotenv.config();
 
@@ -18,13 +17,6 @@ function encodePosition(collateral: bigint, borrowed: bigint, ownerPrefix: bigin
   return "0x" + buf.toString("hex");
 }
 
-function blake2bHash(data: Buffer): string {
-  // CKB uses blake2b-256 with personal "ckb-default-hash"
-  // We approximate with SHA256 for code_hash derivation here
-  // In production use @nervosnetwork/ckb-sdk-utils blake2b
-  return "0x" + createHash("sha256").update(data).digest("hex");
-}
-
 async function main() {
   const client = new ccc.ClientPublicTestnet({
     url: process.env.CKB_RPC_URL || "https://testnet.ckb.dev/rpc",
@@ -36,7 +28,7 @@ async function main() {
 
   console.log(`[SEED] Balance: ${Number(balance) / 1e8} CKB`);
 
-  // The contract cell dep — out_point of our deployed collateral contract
+  // The contract cell dep - out_point of our deployed collateral contract
   const contractOutPoint = {
     txHash: process.env.COLLATERAL_CONTRACT_TX_HASH!,
     index: 0,

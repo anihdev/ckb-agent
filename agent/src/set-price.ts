@@ -16,7 +16,7 @@ async function main() {
   const signer = new ccc.SignerCkbPrivateKey(client, process.env.AGENT_PRIVATE_KEY!);
   const lockScript = (await signer.getAddressObjs())[0].script;
 
-  // CKB price = $0.015 → stored as 15 (x1000)
+  // CKB price = $0.015 -> stored as 15 (x1000)
   const data = encodePriceData(15n, 1n);
   console.log(`[PRICE] Setting CKB price to $0.015 (encoded as 15 x1000)`);
 
@@ -29,7 +29,7 @@ async function main() {
   await tx.completeFeeBy(signer, 1000);
 
   const txHash = await signer.sendTransaction(tx);
-  console.log(`[PRICE] ✅ Price cell created! TX: ${txHash}`);
+  console.log(`[PRICE] Price cell created! TX: ${txHash}`);
   console.log(`[PRICE] Update .env: PRICE_ORACLE_TX_HASH=${txHash}`);
 }
 

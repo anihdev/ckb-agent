@@ -175,7 +175,7 @@ Copy `AGENT_PRIVATE_KEY` into `.env`.
 
 1. Copy `AGENT_ADDRESS` from above
 2. Visit https://faucet.nervos.org
-3. Paste address, claim CKB (claim 3 times to get ~300,000 CKB)
+3. Paste address, claim CKB
 
 Verify:
 
@@ -304,26 +304,20 @@ Explorer: https://pudge.explorer.nervos.org/transaction/0x402b4eed3167018ff92d1d
 
 ---
 
-## Troubleshooting
+## Conventions
 
-**`capsule build` fails — OpenSSL error**
-```bash
-sudo apt install pkg-config libssl-dev -y
-```
+### Emoji Usage
 
-**`ETIMEDOUT` connecting to testnet**
-Network issue on some ISPs. Use a VPN (ProtonVPN, Windscribe — free tier works) or SSH into a remote server outside the affected network.
+Emojis in this project are **intentional visual indicators**, not decoration:
 
-**`ScriptNotFound` error when seeding**
-`COLLATERAL_CODE_HASH` is missing from `.env`. Run `npm run deploy` and copy the code hash it prints.
+| Emoji | Meaning |
+|-------|---------|
+| 🛡️ | Guardian agent branding |
+| ✅ | `SAFE` - position is healthy |
+| ⚠️ | `WARNING` - position approaching risk threshold |
+| 🚨 | `CRITICAL` - position requires immediate action |
 
-**Agent shows mock positions every cycle**
-Both `COLLATERAL_CODE_HASH` and `COLLATERAL_CONTRACT_TX_HASH` must be set in `.env`. Run `npm run demo-connection` to diagnose.
-
-**`riscv64imac-unknown-none-elf` not found**
-```bash
-rustup target add riscv64imac-unknown-none-elf
-```
+These appear in logs, reports, terminal output, and documentation by design.
 
 ---
 
@@ -341,10 +335,3 @@ rustup target add riscv64imac-unknown-none-elf
 ## Business Model
 
 Pay-per-protection. 1 CKB per protective action. When a Fiber node is running, fees settle instantly via off-chain micropayment. Otherwise, fees batch on L1 at the 65 CKB cell minimum threshold. If nothing happens, nothing is charged.
-
----
-
-## Built For
-
-Claw & Order: CKB AI Agent Hackathon — March 2026
-https://github.com/anihdev/ckb-agent

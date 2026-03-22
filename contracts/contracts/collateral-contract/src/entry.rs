@@ -76,7 +76,7 @@ pub fn main() -> Result<(), Error> {
             Ok(())
         }
         Err(_) => {
-            // No output cell in this group — this is a repay/close operation
+            // No output cell in this group - this is a repay/close operation
             // Just verify the input exists
             let input_data = load_cell_data(0, Source::GroupInput)
                 .map_err(|_| Error::NoInputCell)?;

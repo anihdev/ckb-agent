@@ -1,7 +1,5 @@
 import { ccc } from "@ckb-ccc/core";
 import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import path from "path";
 
 dotenv.config();
 
