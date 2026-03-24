@@ -7,6 +7,7 @@ import { initDb, closeDb, saveRun } from './db.js';
 import { printFeeStatus } from './fees.js';
 import { printFiberStatus } from './fiber.js';
 import { runStartupHealthCheck } from './health.js';
+import { initTelegram, sendTelegramMessage, notifyIterationStart, notifyPositionUpdate, notifyRebalanceAction, notifyError, notifyIterationComplete } from './telegram.js';
 
 let iterationCount = 0;
 let isShuttingDown = false;
@@ -40,6 +41,11 @@ async function main() {
   initDb();
   setupShutdownHandlers();
 
+  if (config.telegramBotToken && config.telegramChatId) {
+    initTelegram(config.telegramBotToken, config.telegramChatId);
+    await sendTelegramMessage('🛡️ CKB Position Guardian started');
+  }
+
   console.log(`[${new Date().toISOString()}] 🛡️  CKB Position Guardian starting...`);
   console.log(`[${new Date().toISOString()}] Mode: ${config.simulate ? 'SIMULATE' : 'LIVE'}`);
   console.log(`[${new Date().toISOString()}] Poll interval: ${config.pollIntervalSeconds}s`);
@@ -56,6 +62,7 @@ async function main() {
     let errors = 0;
 
     try {
+      await notifyIterationStart(iterationCount);
       const positions = await fetchPositions(config);
       positionsChecked = positions.length;
       const actions: (RebalanceAction | null)[] = [];
@@ -67,10 +74,27 @@ async function main() {
           `LTV: ${position.ltv.toFixed(1)}% | ${riskEmoji(position.risk)}`
         );
 
+        await notifyPositionUpdate(
+          position.owner,
+          position.collateral.toString(),
+          position.borrowed.toString(),
+          position.ltv,
+          riskEmoji(position.risk),
+          position.risk
+        );
+
         if (position.risk !== 'SAFE') {
           const action = await rebalance(position, config);
           actions.push(action);
-          if (action?.executed) actionsSimulated++;
+          if (action?.executed) {
+            actionsSimulated++;
+            await notifyRebalanceAction(
+              position.owner,
+              action.actionType || 'REPAY',
+              action.repayAmount?.toString() || '0',
+              action.executed
+            );
+          }
         } else {
           actions.push(null);
         }
@@ -80,9 +104,14 @@ async function main() {
       printFeeStatus();
       await printFiberStatus(config.fiberRpcUrl);
 
+      const duration = Date.now() - startedAt;
+      await notifyIterationComplete(iterationCount, positionsChecked, actionsSimulated, errors, duration);
+
     } catch (err) {
       errors++;
+      const errorMsg = err instanceof Error ? err.message : String(err);
       console.error(`[${new Date().toISOString()}] Error in iteration #${iterationCount}:`, err);
+      await notifyError(errorMsg);
     }
 
     saveRun({ started_at: startedAt, positions_checked: positionsChecked, actions_simulated: actionsSimulated, errors });

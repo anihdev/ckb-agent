@@ -15,6 +15,8 @@ export interface Config {
   criticalLtv: number;
   simulate: boolean;
   fiberRpcUrl: string;
+  telegramBotToken: string | null;
+  telegramChatId: string | null;
 }
 
 export function loadConfig(): Config {
@@ -31,18 +33,20 @@ export function loadConfig(): Config {
   }
 
   return {
-    ckbRpcUrl:                process.env.CKB_RPC_URL!,
-    ckbIndexerUrl:            process.env.CKB_INDEXER_URL!,
-    agentPrivateKey:          process.env.AGENT_PRIVATE_KEY!,
+    ckbRpcUrl: process.env.CKB_RPC_URL!,
+    ckbIndexerUrl: process.env.CKB_INDEXER_URL!,
+    agentPrivateKey: process.env.AGENT_PRIVATE_KEY!,
     collateralContractTxHash: process.env.COLLATERAL_CONTRACT_TX_HASH || '',
-    collateralCodeHash:       process.env.COLLATERAL_CODE_HASH || '',
-    priceOracleTxHash:        process.env.PRICE_ORACLE_TX_HASH || '',
-    lockScriptTxHash:         process.env.LOCK_SCRIPT_TX_HASH || '',
-    pollIntervalSeconds:      parseInt(process.env.POLL_INTERVAL_SECONDS || '300'),
-    maxSpendPerTx:            BigInt(process.env.MAX_SPEND_PER_TX || '100000000000'),
-    warningLtv:               parseInt(process.env.WARNING_LTV || '70'),
-    criticalLtv:              parseInt(process.env.CRITICAL_LTV || '80'),
+    collateralCodeHash: process.env.COLLATERAL_CODE_HASH || '',
+    priceOracleTxHash: process.env.PRICE_ORACLE_TX_HASH || '',
+    lockScriptTxHash: process.env.LOCK_SCRIPT_TX_HASH || '',
+    pollIntervalSeconds: parseInt(process.env.POLL_INTERVAL_SECONDS || '300'),
+    maxSpendPerTx: BigInt(process.env.MAX_SPEND_PER_TX || '100000000000'),
+    warningLtv: parseInt(process.env.WARNING_LTV || '70'),
+    criticalLtv: parseInt(process.env.CRITICAL_LTV || '80'),
     fiberRpcUrl: process.env.FIBER_RPC_URL || "http://127.0.0.1:8227",
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || null,
+    telegramChatId: process.env.TELEGRAM_CHAT_ID || null,
     simulate: process.argv.includes('--simulate'),
   };
 }

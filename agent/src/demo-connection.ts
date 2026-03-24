@@ -52,7 +52,7 @@ async function main() {
     }
 
     // Check agent wallet balance
-    console.log(`\n💳 Agent Wallet:`);
+    console.log(`Agent Wallet:`);
     const signer = new ccc.SignerCkbPrivateKey(client, process.env.AGENT_PRIVATE_KEY!);
     const balance = await signer.getBalance();
     const address = await signer.getRecommendedAddress();
@@ -83,7 +83,7 @@ async function main() {
       console.log(`   Total positions found: ${positionCount}`);
     }
 
-    console.log(`\n✅ All systems operational — CKB Position Guardian is live on testnet`);
+    console.log(`All systems operational — CKB Position Guardian is live on testnet`);
     console.log(`   View contracts on CKB Explorer:`);
     console.log(`   https://pudge.explorer.nervos.org/transaction/${collateralTxHash}`);
 
