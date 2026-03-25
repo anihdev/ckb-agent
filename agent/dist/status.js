@@ -26,7 +26,7 @@ export function writeStatusFile(positions, actions) {
     lines.push(`Contracts (CKB Testnet):`);
     lines.push(`  Collateral: 0x402b4eed3167018ff92d1dd12cfe2baefbfb33c7fad06895817cd7690ac8fe11`);
     lines.push(`  Explorer:   https://pudge.explorer.nervos.org/transaction/0x402b4eed...`);
-    lines.push(`  Repo:       https://github.com/anihdev/ckb-agent`);
+    lines.push(`  Repo:       https://github.com/anihdev/CKB_DEFI_GUARDIAN`);
     const statusPath = path.join(process.cwd(), '..', 'status.txt');
     fs.writeFileSync(statusPath, lines.join('\n'));
 }

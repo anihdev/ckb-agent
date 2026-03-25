@@ -371,7 +371,7 @@ function handleProject(): string {
     '🛡️ CKB Position Guardian',
     '',
     '- Event: Claw & Order: CKB AI Agent Hackathon (March 2026)',
-    '- Repository: https://github.com/anihdev/ckb-agent',
+    '- Repository: https://github.com/anihdev/CKB_DEFI_GUARDIAN',
     '- Architecture: Smart contracts (Rust) + TypeScript agent + Telegram integration',
     '- Innovation: Lock scripts enforce spending limits at blockchain consensus level',
     '- Fee Settlement: Fiber Network micropayment channels for instant settlement',

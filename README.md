@@ -168,7 +168,7 @@ sudo usermod -aG docker $USER
 ### Step 6 — Clone and Install
 
 ```bash
-git clone https://github.com/anihdev/ckb-agent
+git clone https://github.com/anihdev/CKB_DEFI_GUARDIAN.git ckb-agent
 cd ckb-agent/agent
 npm install
 ```
