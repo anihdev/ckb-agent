@@ -18,6 +18,7 @@ export interface Config {
   telegramBotToken: string | null;
   telegramChatId: string | null;
   telegramBootstrapPath: string;
+  telegramDemoMode: boolean;
 }
 
 export function loadConfig(): Config {
@@ -49,6 +50,7 @@ export function loadConfig(): Config {
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || null,
     telegramChatId: process.env.TELEGRAM_CHAT_ID || null,
     telegramBootstrapPath: process.env.TELEGRAM_BOOTSTRAP_PATH || '../../BOOTSTRAP.md',
+    telegramDemoMode: process.env.TELEGRAM_DEMO_MODE === 'true',
     simulate: process.argv.includes('--simulate'),
   };
 }

@@ -5,9 +5,9 @@ import { generateReport } from './reporter.js';
 import { loadConfig } from './config.js';
 import { initDb, closeDb, savePosition, saveRun } from './db.js';
 import { printFeeStatus } from './fees.js';
-import { printFiberStatus } from './fiber.js';
+import { getFiberStatus, printFiberStatus } from './fiber.js';
 import { runStartupHealthCheck } from './health.js';
-import { configureTelegramQueries, initTelegram, sendTelegramMessage, startTelegramPolling, notifyPositionUpdate, notifyRebalanceAction, notifyError } from './telegram.js';
+import { configureTelegramQueries, initTelegram, sendTelegramMessage, startTelegramPolling, notifyDemoSnapshot, notifyPositionUpdate, notifyRebalanceAction, notifyError } from './telegram.js';
 let iterationCount = 0;
 let isShuttingDown = false;
 const lastNotifiedRiskState = new Map();
@@ -73,6 +73,9 @@ async function main() {
             const positions = await fetchPositions(config);
             positionsChecked = positions.length;
             const actions = [];
+            let safeCount = 0;
+            let warningCount = 0;
+            let criticalCount = 0;
             for (const position of positions) {
                 console.log(`[${new Date().toISOString()}] ${position.owner} | ` +
                     `${(Number(position.collateral) / 1e8).toFixed(0)} CKB / ${position.borrowed} RUSD | ` +
@@ -86,6 +89,12 @@ async function main() {
                     action_taken: 'NONE',
                     timestamp: Date.now(),
                 });
+                if (position.risk === 'SAFE')
+                    safeCount++;
+                else if (position.risk === 'WARNING')
+                    warningCount++;
+                else if (position.risk === 'CRITICAL')
+                    criticalCount++;
                 if (position.risk !== 'SAFE') {
                     const action = await rebalance(position, config);
                     actions.push(action);
@@ -107,6 +116,13 @@ async function main() {
             generateReport(positions, actions);
             printFeeStatus();
             await printFiberStatus(config.fiberRpcUrl);
+            if (config.telegramBotToken && config.telegramChatId && config.telegramDemoMode) {
+                const fiberStatus = await getFiberStatus(config.fiberRpcUrl);
+                const fiberLabel = fiberStatus.available
+                    ? (fiberStatus.channelId ? 'channel ready' : 'node running, channel pending')
+                    : 'fallback active';
+                await notifyDemoSnapshot(iterationCount, positionsChecked, safeCount, warningCount, criticalCount, actionsSimulated, fiberLabel);
+            }
         }
         catch (err) {
             errors++;

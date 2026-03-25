@@ -111,6 +111,17 @@ export async function notifyIterationComplete(iterationCount, positionsChecked, 
         `Duration: ${durationSec}s`;
     await sendTelegramMessage(message);
 }
+export async function notifyDemoSnapshot(iterationCount, positionsChecked, safeCount, warningCount, criticalCount, actionsSimulated, fiberLabel) {
+    const message = `🛡️ *Demo Snapshot*\n` +
+        `Iteration: #${iterationCount}\n` +
+        `Positions checked: ${positionsChecked}\n` +
+        `Safe: ${safeCount}\n` +
+        `Warning: ${warningCount}\n` +
+        `Critical: ${criticalCount}\n` +
+        `Actions this cycle: ${actionsSimulated}\n` +
+        `Fiber: ${fiberLabel}`;
+    await sendTelegramMessage(message);
+}
 export async function notifyFeeUpdate(feesAccumulated, fiberStatus) {
     const message = `*Fee Update*\n` +
         `Accumulated: ${feesAccumulated} shannons\n` +

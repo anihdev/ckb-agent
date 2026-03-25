@@ -4,6 +4,8 @@
 
 > An autonomous AI agent that monitors collateral positions on CKB testnet, computes health factors in real time, classifies risk, and simulates protective repay/rebalance actions — with spending enforced by CKB lock scripts and fees settled via Fiber Network.
 
+**Public Telegram bot:** [`@ckbguardianbot`](https://t.me/ckbguardianbot)
+
 ---
 
 ## What It Does
@@ -19,6 +21,49 @@ CKB Position Guardian runs headlessly with no human in the loop. Every 5 minutes
 7. **Settles** a 1 CKB fee per protective action instantly via Fiber micropayment (or batches to L1 as fallback)
 8. **Generates** a timestamped DEMO SNAPSHOT and HTML report
 9. **Shuts down gracefully** on SIGINT/SIGTERM — closes SQLite cleanly, logs iteration count
+
+### Telegram Behavior
+
+When Telegram is configured, the guardian is designed to be **high-signal**, not noisy:
+
+- Sends startup and shutdown notices
+- Sends alerts for `WARNING` / `CRITICAL` positions when the risk state changes
+- Sends rebalance action notifications
+- Sends error notifications
+- Does **not** send every loop iteration start/completion
+- Does **not** spam `SAFE` position updates
+
+For hackathon/demo mode, you can enable compact periodic Telegram heartbeat messages with:
+
+```env
+TELEGRAM_DEMO_MODE=true
+```
+
+When enabled, the bot sends a compact `Demo Snapshot` each cycle with:
+
+- positions checked
+- safe / warning / critical counts
+- actions this cycle
+- current Fiber state label
+
+For conversational Telegram queries, the recommended architecture is:
+
+- OpenClaw handles Telegram chat/session behavior
+- the guardian agent keeps `guardian.db` fresh
+- OpenClaw delegates guardian-specific questions to `npm run query`
+
+Public bot:
+
+- Telegram: [`@ckbguardianbot`](https://t.me/ckbguardianbot)
+- Best demo/test prompts:
+  - `what are the current positions?`
+  - `is anything at risk?`
+  - `any safe positions?`
+  - `how many actions today?`
+  - `what is your status?`
+  - `is it connected to fiber yet`
+  - `who are you`
+  - `tell me about the project`
 
 ---
 
@@ -150,9 +195,10 @@ npm install
 ### Step 7 — Configure Environment
 
 ```bash
-cp .env.example .env
 nano .env
 ```
+
+> This repo currently ships with a real `.env` in `agent/` and does not include a committed `.env.example`. Create `.env` manually if needed.
 
 Required fields:
 
@@ -170,8 +216,12 @@ WARNING_LTV=70
 CRITICAL_LTV=80
 FIBER_RPC_URL=http://127.0.0.1:8227   # optional — Fiber node for instant fee settlement
 TELEGRAM_BOT_TOKEN=                   # optional — enables Telegram notifications + queries
-TELEGRAM_CHAT_ID=                     # optional — only this chat ID can query the bot
+TELEGRAM_CHAT_ID=                     # optional — used by the built-in direct Telegram path
+TELEGRAM_BOOTSTRAP_PATH=../../BOOTSTRAP.md
+TELEGRAM_DEMO_MODE=false              # optional — set true for visible demo heartbeats each cycle
 ```
+
+If you are using OpenClaw as the Telegram front-end, keep the guardian agent running normally and let OpenClaw delegate user questions to the local guardian query CLI instead of relying on the built-in direct Telegram query path.
 
 
 ### Step 8 — Generate Agent Wallet
@@ -289,10 +339,27 @@ Stop with `Ctrl+C` — shuts down gracefully.
 |---|---|
 | `npm run start` | Run agent in live mode |
 | `npm run simulate` | Run agent in simulate mode |
+| `npm run query -- "what are the current positions?"` | Answer guardian questions from `guardian.db` |
 | `npm run deploy` | Deploy contracts to testnet |
 | `npm run seed` | Create test positions on-chain |
 | `npm run set-price` | Deploy price data cell |
 | `npm run demo-connection` | Prove live testnet connectivity |
+
+### Recommended Guardian Queries
+
+These are the highest-signal queries to use in Telegram or locally through `npm run query`:
+
+```bash
+npm run query -- "what are the current positions?"
+npm run query -- "is anything at risk?"
+npm run query -- "any safe positions?"
+npm run query -- "how many actions today?"
+npm run query -- "what is your status?"
+npm run query -- "health"
+npm run query -- "is it connected to fiber yet"
+npm run query -- "who are you"
+npm run query -- "tell me about the project"
+```
 
 ---
 
@@ -351,8 +418,14 @@ The agent maintains a local SQLite database at `agent/guardian.db` as a complete
 | `borrowed` | TEXT | Borrowed amount in RUSD |
 | `ltv` | REAL | Computed loan-to-value ratio |
 | `risk` | TEXT | Classification: `SAFE`, `WARNING`, or `CRITICAL` |
-| `action_taken` | TEXT | Action performed (e.g., `NONE`, `REPAY_10_RUSD`, `REPAY_45_RUSD`) |
+| `action_taken` | TEXT | Action performed for that row (e.g., `NONE`, `REPAY_10_RUSD`, `REPAY_45_RUSD`) |
 | `timestamp` | INTEGER | Unix timestamp of the snapshot |
+
+The query layer treats `positions` as a **snapshot log**:
+
+- every loop records the current observed positions
+- `current positions` queries use only the latest snapshot window
+- historical rows remain available for audit and recent-action reporting
 
 **`agent_runs`** — Metadata for each polling iteration.
 
@@ -372,7 +445,8 @@ The agent maintains a local SQLite database at `agent/guardian.db` as a complete
 | `owner` | TEXT | Position owner who owes the fee |
 | `amount_ckb` | TEXT | Fee amount in CKB |
 | `action` | TEXT | The protective action that triggered the fee |
-| `settled` | INTEGER | `0` = unsettled, `1` = settled (via Fiber or L1 batch) |
+| `settled` | INTEGER | `0` = unsettled, `1` = settled on L1 batch |
+| `fiber_settled` | INTEGER | `0` = not settled via Fiber, `1` = settled via Fiber |
 | `timestamp` | INTEGER | Unix timestamp of the fee record |
 
 ### Querying
@@ -384,6 +458,15 @@ Type .quit or press Ctrl+D to exit.
 ```
 
 ```sql
+-- Latest snapshot positions (current state)
+WITH latest AS (
+  SELECT MAX(timestamp) AS latest_ts FROM positions
+)
+SELECT owner, ltv, risk, action_taken
+FROM positions, latest
+WHERE timestamp >= latest.latest_ts - 60000
+ORDER BY ltv DESC, owner ASC;
+
 -- Recent position actions
 SELECT owner, ltv, risk, action_taken, datetime(timestamp, 'unixepoch')
 FROM positions ORDER BY timestamp DESC LIMIT 10;
@@ -393,11 +476,11 @@ SELECT datetime(started_at, 'unixepoch'), positions_checked, actions_simulated, 
 FROM agent_runs ORDER BY started_at DESC;
 
 -- Unsettled fees
-SELECT owner, amount_ckb, action FROM fees WHERE settled = 0;
+SELECT owner, amount_ckb, action FROM fees WHERE settled = 0 AND fiber_settled = 0;
 
 -- Total fees owed per owner
 SELECT owner, COUNT(*) as actions, SUM(CAST(amount_ckb AS REAL)) as total_ckb
-FROM fees WHERE settled = 0 GROUP BY owner;
+FROM fees WHERE settled = 0 AND fiber_settled = 0 GROUP BY owner;
 ```
 
 The database is closed cleanly on `SIGINT`/`SIGTERM`. To reset it, delete `agent/guardian.db` — it will be recreated on next run.
