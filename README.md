@@ -33,25 +33,6 @@ When Telegram is configured, the guardian is designed to be **high-signal**, not
 - Does **not** send every loop iteration start/completion
 - Does **not** spam `SAFE` position updates
 
-For hackathon/demo mode, you can enable compact periodic Telegram heartbeat messages with:
-
-```env
-TELEGRAM_DEMO_MODE=true
-```
-
-When enabled, the bot sends a compact `Demo Snapshot` each cycle with:
-
-- positions checked
-- safe / warning / critical counts
-- actions this cycle
-- current Fiber state label
-
-For conversational Telegram queries, the recommended architecture is:
-
-- OpenClaw handles Telegram chat/session behavior
-- the guardian agent keeps `guardian.db` fresh
-- OpenClaw delegates guardian-specific questions to `npm run query`
-
 Public bot:
 
 - Telegram: [`@ckbguardianbot`](https://t.me/ckbguardianbot)
