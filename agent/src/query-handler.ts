@@ -1,12 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import { getDb } from './db.js';
+import { getFiberStatus } from './fiber.js';
 
 export interface QueryHandlerConfig {
   warningLtv: number;
   criticalLtv: number;
   simulate: boolean;
   bootstrapPath: string;
+  fiberRpcUrl?: string;
 }
 
 interface PositionRow {
@@ -26,6 +28,11 @@ interface RunRow {
   errors: number;
 }
 
+interface FeeSummaryRow {
+  total_actions: number;
+  fiber_actions: number;
+}
+
 function shortOwner(owner: string): string {
   return owner.length > 18 ? `${owner.slice(0, 18)}...` : owner;
 }
@@ -34,11 +41,38 @@ function formatCkb(collateral: string): string {
   return `${(Number(collateral) / 1e8).toFixed(0)} CKB`;
 }
 
+function formatRisk(risk: string): string {
+  switch (risk) {
+    case 'CRITICAL':
+      return '🚨 CRITICAL';
+    case 'WARNING':
+      return '⚠️ WARNING';
+    case 'SAFE':
+      return '✅ SAFE';
+    default:
+      return risk;
+  }
+}
+
+function formatAction(action: string): string {
+  if (!action || action === 'NONE') return 'NONE';
+  return action
+    .replace(/^REPAY_?/i, 'Repay ')
+    .replace(/_RUSD$/i, ' RUSD')
+    .replace(/_/g, ' ');
+}
+
 function formatPosition(position: PositionRow, index: number): string {
   const action = position.action_taken && position.action_taken !== 'NONE'
-    ? ` | ${position.action_taken}`
+    ? `\nAction: ${formatAction(position.action_taken)}`
     : '';
-  return `Position ${index + 1}: ${shortOwner(position.owner)} | ${formatCkb(position.collateral)} collateral | ${position.borrowed} RUSD borrowed | LTV ${position.ltv.toFixed(1)}% | ${position.risk}${action}`;
+  return [
+    `Position ${index + 1}: ${shortOwner(position.owner)}`,
+    `Collateral: ${formatCkb(position.collateral)}`,
+    `Borrowed: ${position.borrowed} RUSD`,
+    `LTV: ${position.ltv.toFixed(1)}%`,
+    `Risk: ${formatRisk(position.risk)}${action}`,
+  ].join('\n');
 }
 
 function getLatestPositions(): PositionRow[] {
@@ -101,6 +135,32 @@ function getLatestRun(): RunRow | null {
   `).get() as RunRow | undefined ?? null;
 }
 
+function getFeeSummary(sinceTimestamp: number): FeeSummaryRow {
+  const db = getDb();
+  const columns = db.prepare(`PRAGMA table_info(fees)`).all() as Array<{ name: string }>;
+  const hasFiberSettled = columns.some(column => column.name === 'fiber_settled');
+
+  const query = hasFiberSettled
+    ? `
+      SELECT COUNT(*) AS total_actions,
+             SUM(CASE WHEN fiber_settled = 1 THEN 1 ELSE 0 END) AS fiber_actions
+      FROM fees
+      WHERE timestamp >= ?
+    `
+    : `
+      SELECT COUNT(*) AS total_actions,
+             0 AS fiber_actions
+      FROM fees
+      WHERE timestamp >= ?
+    `;
+
+  const row = db.prepare(query).get(sinceTimestamp) as { total_actions: number | null; fiber_actions: number | null };
+  return {
+    total_actions: row?.total_actions ?? 0,
+    fiber_actions: row?.fiber_actions ?? 0,
+  };
+}
+
 function resolveBootstrapPath(rawPath: string): string {
   return path.isAbsolute(rawPath) ? rawPath : path.resolve(process.cwd(), rawPath);
 }
@@ -125,6 +185,8 @@ function helpText(config: QueryHandlerConfig): string {
     '- is anything at risk?',
     '- how many actions today?',
     '- what is your status?',
+    '- is it connected to fiber yet?',
+    '- who are you?',
     '- tell me about the project',
     '',
     `Mode: ${config.simulate ? 'SIMULATE' : 'LIVE'}`,
@@ -147,9 +209,9 @@ function handleCurrentPositions(): string {
   return [
     '🛡️ Current Positions',
     '',
-    ...positions.map(formatPosition),
+    positions.map(formatPosition).join('\n\n'),
     '',
-    'Source: SQLite `guardian.db` -> `positions`',
+    'Source: SQLite guardian.db -> positions',
   ].join('\n');
 }
 
@@ -162,30 +224,34 @@ function handleRiskStatus(): string {
   return [
     '🚨 At-Risk Positions',
     '',
-    ...positions.map((position, index) => {
+    positions.map((position, index) => {
       const recommended = position.risk === 'CRITICAL'
         ? 'Recommended action: simulate immediate repay toward ~60% LTV'
         : 'Recommended action: simulate repay before crossing CRITICAL';
       return `${formatPosition(position, index)}\n${recommended}`;
-    }),
+    }).join('\n\n'),
     '',
-    'Source: SQLite `guardian.db` -> `positions`',
+    'Source: SQLite guardian.db -> positions',
   ].join('\n');
 }
 
 function handleActionsToday(): string {
   const since = Date.now() - 86_400_000;
   const actions = getRecentActions(since);
+  const feeSummary = getFeeSummary(since);
   if (actions.length === 0) {
-    return '🛡️ No rebalance actions recorded in the last 24 hours.\n\nSource: SQLite `guardian.db` -> `positions`';
+    return '🛡️ No rebalance actions recorded in the last 24 hours.\n\nSource: SQLite guardian.db -> positions';
   }
 
   return [
     `🛡️ Actions in the Last 24 Hours: ${actions.length}`,
     '',
-    ...actions.map((action, index) => `${index + 1}. ${shortOwner(action.owner)} | ${action.action_taken} | ${new Date(action.timestamp).toISOString()}`),
+    `Fee records: ${feeSummary.total_actions} total${feeSummary.fiber_actions > 0 ? ` | ${feeSummary.fiber_actions} settled via Fiber` : ' | 0 settled via Fiber'}`,
     '',
-    'Source: SQLite `guardian.db` -> `positions`',
+    ...actions.slice(0, 10).map((action, index) => `${index + 1}. ${shortOwner(action.owner)} | ${formatAction(action.action_taken)} | ${new Date(action.timestamp).toISOString()}`),
+    ...(actions.length > 10 ? [`...and ${actions.length - 10} more action records`] : []),
+    '',
+    'Source: SQLite guardian.db -> positions, fees',
   ].join('\n');
 }
 
@@ -212,7 +278,58 @@ function handleStatus(config: QueryHandlerConfig): string {
     '',
     `Last Updated: ${latestTimestamp ? new Date(latestTimestamp).toISOString() : 'No position snapshots yet'}`,
     '',
-    'Source: SQLite `guardian.db` -> `positions`, `agent_runs`',
+    'Source: SQLite guardian.db -> positions, agent_runs',
+  ].join('\n');
+}
+
+async function handleFiberStatus(config: QueryHandlerConfig): Promise<string> {
+  if (config.fiberRpcUrl) {
+    const liveStatus = await getFiberStatus(config.fiberRpcUrl);
+    if (liveStatus.available) {
+      return [
+        'Fiber Status',
+        '',
+        `Node: running${liveStatus.nodeId ? ` (${liveStatus.nodeId.slice(0, 16)}...)` : ''}`,
+        liveStatus.channelId
+          ? `Channel: ready | Balance: ${liveStatus.channelBalance ? Number(liveStatus.channelBalance) / 1e8 : 0} CKB`
+          : 'Channel: not ready yet',
+        '',
+        'Source: live Fiber RPC',
+      ].join('\n');
+    }
+  }
+
+  const since = Date.now() - 86_400_000;
+  const feeSummary = getFeeSummary(since);
+
+  if (feeSummary.fiber_actions > 0) {
+    return [
+      'Fiber Status',
+      '',
+      `Fiber settlement is active in the recent fee log.`,
+      `Fees settled via Fiber in the last 24 hours: ${feeSummary.fiber_actions}`,
+      `Total fee records in the last 24 hours: ${feeSummary.total_actions}`,
+      '',
+      'Source: SQLite guardian.db -> fees',
+    ].join('\n');
+  }
+
+  return [
+    'Fiber Status',
+    '',
+    'Fiber integration is configured in the project, but there are no recent fee records marked as settled via Fiber.',
+    'That usually means the agent is either using fallback accumulation or Fiber has not completed settlement recently.',
+    '',
+    'Source: SQLite guardian.db -> fees',
+  ].join('\n');
+}
+
+function handleIdentity(): string {
+  return [
+    '🛡️ I am CKB Guardian.',
+    '',
+    'I monitor collateralized debt positions on CKB testnet, classify risk, and report simulated protective actions.',
+    'Ask me about current positions, risk, actions today, status, Fiber settlement, or the project.',
   ].join('\n');
 }
 
@@ -236,7 +353,7 @@ function handleProject(): string {
   ].join('\n');
 }
 
-export function answerTelegramQuery(message: string, config: QueryHandlerConfig): string {
+export async function answerTelegramQuery(message: string, config: QueryHandlerConfig): Promise<string> {
   const normalized = message.trim().toLowerCase();
 
   if (!normalized || normalized === '/start' || normalized === '/help') {
@@ -275,6 +392,19 @@ export function answerTelegramQuery(message: string, config: QueryHandlerConfig)
     normalized.includes('hackathon')
   ) {
     return handleProject();
+  }
+
+  if (normalized.includes('fiber')) {
+    return handleFiberStatus(config);
+  }
+
+  if (
+    normalized.includes('who are you') ||
+    normalized.includes('what do you do') ||
+    normalized === 'who are you' ||
+    normalized === 'what you do'
+  ) {
+    return handleIdentity();
   }
 
   return [

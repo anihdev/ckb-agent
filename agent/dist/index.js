@@ -7,7 +7,7 @@ import { initDb, closeDb, saveRun } from './db.js';
 import { printFeeStatus } from './fees.js';
 import { printFiberStatus } from './fiber.js';
 import { runStartupHealthCheck } from './health.js';
-import { configureTelegramQueries, initTelegram, sendTelegramMessage, startTelegramPolling, notifyIterationStart, notifyPositionUpdate, notifyRebalanceAction, notifyError, notifyIterationComplete } from './telegram.js';
+import { configureTelegramQueries, initTelegram, sendTelegramMessage, startTelegramPolling, notifyPositionUpdate, notifyRebalanceAction, notifyError, notifyIterationComplete } from './telegram.js';
 let iterationCount = 0;
 let isShuttingDown = false;
 function setupShutdownHandlers() {
@@ -62,7 +62,6 @@ async function main() {
         let actionsSimulated = 0;
         let errors = 0;
         try {
-            await notifyIterationStart(iterationCount);
             const positions = await fetchPositions(config);
             positionsChecked = positions.length;
             const actions = [];
@@ -70,10 +69,10 @@ async function main() {
                 console.log(`[${new Date().toISOString()}] ${position.owner} | ` +
                     `${(Number(position.collateral) / 1e8).toFixed(0)} CKB / ${position.borrowed} RUSD | ` +
                     `LTV: ${position.ltv.toFixed(1)}% | ${riskEmoji(position.risk)}`);
-                await notifyPositionUpdate(position.owner, position.collateral.toString(), position.borrowed.toString(), position.ltv, riskEmoji(position.risk), position.risk);
                 if (position.risk !== 'SAFE') {
                     const action = await rebalance(position, config);
                     actions.push(action);
+                    await notifyPositionUpdate(position.owner, position.collateral.toString(), position.borrowed.toString(), position.ltv, riskEmoji(position.risk), position.risk);
                     if (action?.executed) {
                         actionsSimulated++;
                         await notifyRebalanceAction(position.owner, action.actionType || 'REPAY', action.repayAmount?.toString() || '0', action.executed);
@@ -87,7 +86,9 @@ async function main() {
             printFeeStatus();
             await printFiberStatus(config.fiberRpcUrl);
             const duration = Date.now() - startedAt;
-            await notifyIterationComplete(iterationCount, positionsChecked, actionsSimulated, errors, duration);
+            if (actionsSimulated > 0 || errors > 0) {
+                await notifyIterationComplete(iterationCount, positionsChecked, actionsSimulated, errors, duration);
+            }
         }
         catch (err) {
             errors++;

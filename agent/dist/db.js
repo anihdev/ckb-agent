@@ -35,9 +35,15 @@ export function initDb() {
       amount_ckb  TEXT NOT NULL,
       action      TEXT NOT NULL,
       settled     INTEGER DEFAULT 0,
+      fiber_settled INTEGER DEFAULT 0,
       timestamp   INTEGER NOT NULL
     );
   `);
+    // Keep older databases compatible with Fiber settlement tracking.
+    const feeColumns = db.prepare(`PRAGMA table_info(fees)`).all();
+    if (!feeColumns.some(column => column.name === 'fiber_settled')) {
+        db.exec(`ALTER TABLE fees ADD COLUMN fiber_settled INTEGER DEFAULT 0`);
+    }
     console.log(`[DB] Initialized at ${dbPath}`);
 }
 export function savePosition(record) {

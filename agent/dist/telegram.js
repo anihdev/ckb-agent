@@ -55,7 +55,7 @@ async function handleIncomingUpdates() {
         const text = update.message?.text?.trim();
         if (!text || incomingChatId !== chatId)
             continue;
-        const reply = answerTelegramQuery(text, queryConfig);
+        const reply = await answerTelegramQuery(text, queryConfig);
         await sendTelegramMessage(reply);
     }
 }

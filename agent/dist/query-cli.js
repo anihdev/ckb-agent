@@ -1,5 +1,7 @@
+import dotenv from 'dotenv';
 import { initDb, closeDb } from './db.js';
 import { answerTelegramQuery } from './query-handler.js';
+dotenv.config();
 function parseArgs(argv) {
     const args = argv.slice(2);
     const query = args.join(' ').trim();
@@ -11,7 +13,7 @@ function parseArgs(argv) {
         bootstrapPath: process.env.TELEGRAM_BOOTSTRAP_PATH || '../../BOOTSTRAP.md',
     };
 }
-function main() {
+async function main() {
     const { query, warningLtv, criticalLtv, simulate, bootstrapPath } = parseArgs(process.argv);
     if (!query) {
         console.error('Usage: node --loader ts-node/esm src/query-cli.ts "what are the current positions?"');
@@ -19,11 +21,12 @@ function main() {
     }
     initDb();
     try {
-        const answer = answerTelegramQuery(query, {
+        const answer = await answerTelegramQuery(query, {
             warningLtv,
             criticalLtv,
             simulate,
             bootstrapPath,
+            fiberRpcUrl: process.env.FIBER_RPC_URL,
         });
         process.stdout.write(`${answer}\n`);
     }
@@ -31,4 +34,7 @@ function main() {
         closeDb();
     }
 }
-main();
+main().catch(err => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+});

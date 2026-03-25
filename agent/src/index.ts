@@ -69,7 +69,6 @@ async function main() {
     let errors = 0;
 
     try {
-      await notifyIterationStart(iterationCount);
       const positions = await fetchPositions(config);
       positionsChecked = positions.length;
       const actions: (RebalanceAction | null)[] = [];
@@ -81,18 +80,19 @@ async function main() {
           `LTV: ${position.ltv.toFixed(1)}% | ${riskEmoji(position.risk)}`
         );
 
-        await notifyPositionUpdate(
-          position.owner,
-          position.collateral.toString(),
-          position.borrowed.toString(),
-          position.ltv,
-          riskEmoji(position.risk),
-          position.risk
-        );
-
         if (position.risk !== 'SAFE') {
           const action = await rebalance(position, config);
           actions.push(action);
+
+          await notifyPositionUpdate(
+            position.owner,
+            position.collateral.toString(),
+            position.borrowed.toString(),
+            position.ltv,
+            riskEmoji(position.risk),
+            position.risk
+          );
+
           if (action?.executed) {
             actionsSimulated++;
             await notifyRebalanceAction(
@@ -112,7 +112,9 @@ async function main() {
       await printFiberStatus(config.fiberRpcUrl);
 
       const duration = Date.now() - startedAt;
-      await notifyIterationComplete(iterationCount, positionsChecked, actionsSimulated, errors, duration);
+      if (actionsSimulated > 0 || errors > 0) {
+        await notifyIterationComplete(iterationCount, positionsChecked, actionsSimulated, errors, duration);
+      }
 
     } catch (err) {
       errors++;

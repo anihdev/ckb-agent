@@ -1,5 +1,8 @@
+import dotenv from 'dotenv';
 import { initDb, closeDb } from './db.js';
 import { answerTelegramQuery } from './query-handler.js';
+
+dotenv.config();
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
@@ -14,7 +17,7 @@ function parseArgs(argv: string[]) {
   };
 }
 
-function main() {
+async function main() {
   const { query, warningLtv, criticalLtv, simulate, bootstrapPath } = parseArgs(process.argv);
 
   if (!query) {
@@ -25,11 +28,12 @@ function main() {
   initDb();
 
   try {
-    const answer = answerTelegramQuery(query, {
+    const answer = await answerTelegramQuery(query, {
       warningLtv,
       criticalLtv,
       simulate,
       bootstrapPath,
+      fiberRpcUrl: process.env.FIBER_RPC_URL,
     });
     process.stdout.write(`${answer}\n`);
   } finally {
@@ -37,4 +41,7 @@ function main() {
   }
 }
 
-main();
+main().catch(err => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+});
