@@ -1,0 +1,15 @@
+[Unit]
+Description=CKB Position Guardian Agent
+After=network.target
+
+[Service]
+Type=simple
+User=anihdev
+WorkingDirectory=/home/anihdev/ckb-agent/agent
+Environment=PATH=/home/anihdev/.nvm/versions/node/v20.19.6/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/anihdev/.nvm/versions/node/v20.19.6/bin/npm run start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

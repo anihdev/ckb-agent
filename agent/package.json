@@ -9,6 +9,7 @@
     "start": "node --loader ts-node/esm src/index.ts",
     "dev": "node --loader ts-node/esm src/index.ts",
     "simulate": "node --loader ts-node/esm src/index.ts --simulate",
+    "query": "node --loader ts-node/esm src/query-cli.ts",
     "deploy": "node --loader ts-node/esm src/deploy.ts",
     "seed": "node --loader ts-node/esm src/seed.ts",
     "seed-one": "node --loader ts-node/esm src/seed-one.ts",

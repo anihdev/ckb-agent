@@ -34,3 +34,7 @@ Thumbs.db
 # other artifacts
 *.log
 *.env
+
+# Markdown files to ignore
+SUBMISSION.md
+OPENCLAW_INTEGRATION.md

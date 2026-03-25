@@ -7,7 +7,7 @@ import { initDb, closeDb, saveRun } from './db.js';
 import { printFeeStatus } from './fees.js';
 import { printFiberStatus } from './fiber.js';
 import { runStartupHealthCheck } from './health.js';
-import { initTelegram, sendTelegramMessage, notifyIterationStart, notifyPositionUpdate, notifyRebalanceAction, notifyError, notifyIterationComplete } from './telegram.js';
+import { configureTelegramQueries, initTelegram, sendTelegramMessage, startTelegramPolling, notifyIterationStart, notifyPositionUpdate, notifyRebalanceAction, notifyError, notifyIterationComplete } from './telegram.js';
 let iterationCount = 0;
 let isShuttingDown = false;
 function setupShutdownHandlers() {
@@ -40,6 +40,13 @@ async function main() {
     setupShutdownHandlers();
     if (config.telegramBotToken && config.telegramChatId) {
         initTelegram(config.telegramBotToken, config.telegramChatId);
+        configureTelegramQueries({
+            warningLtv: config.warningLtv,
+            criticalLtv: config.criticalLtv,
+            simulate: config.simulate,
+            bootstrapPath: config.telegramBootstrapPath,
+        });
+        startTelegramPolling();
         await sendTelegramMessage('🛡️ CKB Position Guardian started');
     }
     console.log(`[${new Date().toISOString()}] 🛡️  CKB Position Guardian starting...`);

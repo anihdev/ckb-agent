@@ -1,11 +1,19 @@
 import axios from 'axios';
+import { answerTelegramQuery, QueryHandlerConfig } from './query-handler.js';
 
 let botToken: string | null = null;
 let chatId: string | null = null;
+let queryConfig: QueryHandlerConfig | null = null;
+let updateOffset = 0;
+let pollingStarted = false;
 
 export function initTelegram(token: string, chat: string) {
   botToken = token;
   chatId = chat;
+}
+
+export function configureTelegramQueries(config: QueryHandlerConfig) {
+  queryConfig = config;
 }
 
 export async function sendTelegramMessage(message: string) {
@@ -24,6 +32,64 @@ export async function sendTelegramMessage(message: string) {
   } catch (err) {
     console.error('[Telegram] Failed to send message:', err instanceof Error ? err.message : err);
   }
+}
+
+async function fetchUpdates() {
+  if (!botToken) return [];
+
+  const url = `https://api.telegram.org/bot${botToken}/getUpdates`;
+  const response = await axios.get(url, {
+    params: {
+      timeout: 0,
+      offset: updateOffset,
+      allowed_updates: ['message'],
+    },
+  });
+
+  if (!response.data?.ok || !Array.isArray(response.data.result)) {
+    return [];
+  }
+
+  return response.data.result as Array<{
+    update_id: number;
+    message?: {
+      chat?: { id?: number | string };
+      text?: string;
+    };
+  }>;
+}
+
+async function handleIncomingUpdates() {
+  if (!chatId || !queryConfig) return;
+
+  const updates = await fetchUpdates();
+  for (const update of updates) {
+    updateOffset = update.update_id + 1;
+
+    const incomingChatId = String(update.message?.chat?.id ?? '');
+    const text = update.message?.text?.trim();
+    if (!text || incomingChatId !== chatId) continue;
+
+    const reply = answerTelegramQuery(text, queryConfig);
+    await sendTelegramMessage(reply);
+  }
+}
+
+export function startTelegramPolling() {
+  if (pollingStarted || !botToken || !chatId || !queryConfig) return;
+  pollingStarted = true;
+
+  const poll = async () => {
+    try {
+      await handleIncomingUpdates();
+    } catch (err) {
+      console.error('[Telegram] Failed to poll updates:', err instanceof Error ? err.message : err);
+    } finally {
+      setTimeout(poll, 5000);
+    }
+  };
+
+  void poll();
 }
 
 export async function notifyIterationStart(iterationCount: number) {

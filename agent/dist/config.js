@@ -26,6 +26,7 @@ export function loadConfig() {
         fiberRpcUrl: process.env.FIBER_RPC_URL || "http://127.0.0.1:8227",
         telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || null,
         telegramChatId: process.env.TELEGRAM_CHAT_ID || null,
+        telegramBootstrapPath: process.env.TELEGRAM_BOOTSTRAP_PATH || '../../BOOTSTRAP.md',
         simulate: process.argv.includes('--simulate'),
     };
 }

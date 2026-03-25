@@ -169,7 +169,10 @@ MAX_SPEND_PER_TX=100000000000
 WARNING_LTV=70
 CRITICAL_LTV=80
 FIBER_RPC_URL=http://127.0.0.1:8227   # optional — Fiber node for instant fee settlement
+TELEGRAM_BOT_TOKEN=                   # optional — enables Telegram notifications + queries
+TELEGRAM_CHAT_ID=                     # optional — only this chat ID can query the bot
 ```
+
 
 ### Step 8 — Generate Agent Wallet
 
