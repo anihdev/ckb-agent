@@ -33,6 +33,8 @@ interface FeeSummaryRow {
   fiber_actions: number;
 }
 
+const SNAPSHOT_WINDOW_MS = 60_000;
+
 function shortOwner(owner: string): string {
   return owner.length > 18 ? `${owner.slice(0, 18)}...` : owner;
 }
@@ -75,43 +77,49 @@ function formatPosition(position: PositionRow, index: number): string {
   ].join('\n');
 }
 
-function getLatestPositions(): PositionRow[] {
-  const db = getDb();
-  return db.prepare(`
-    SELECT p.owner, p.collateral, p.borrowed, p.ltv, p.risk, p.action_taken, p.timestamp
-    FROM positions p
-    INNER JOIN (
-      SELECT owner, MAX(timestamp) AS max_timestamp
-      FROM positions
-      GROUP BY owner
-    ) latest
-      ON latest.owner = p.owner
-     AND latest.max_timestamp = p.timestamp
-    ORDER BY p.ltv DESC, p.owner ASC
-  `).all() as PositionRow[];
-}
-
-function getAtRiskPositions(): PositionRow[] {
-  const db = getDb();
-  return db.prepare(`
-    SELECT p.owner, p.collateral, p.borrowed, p.ltv, p.risk, p.action_taken, p.timestamp
-    FROM positions p
-    INNER JOIN (
-      SELECT owner, MAX(timestamp) AS max_timestamp
-      FROM positions
-      GROUP BY owner
-    ) latest
-      ON latest.owner = p.owner
-     AND latest.max_timestamp = p.timestamp
-    WHERE p.risk IN ('WARNING', 'CRITICAL')
-    ORDER BY p.ltv DESC, p.owner ASC
-  `).all() as PositionRow[];
-}
-
-function getLatestTimestamp(): number | null {
+function getLatestSnapshotTimestamp(): number | null {
   const db = getDb();
   const row = db.prepare(`SELECT MAX(timestamp) AS latest FROM positions`).get() as { latest: number | null };
   return row?.latest ?? null;
+}
+
+function getSnapshotPositions(filterClause = ''): PositionRow[] {
+  const db = getDb();
+  const latestTimestamp = getLatestSnapshotTimestamp();
+  if (!latestTimestamp) return [];
+
+  const cutoff = latestTimestamp - SNAPSHOT_WINDOW_MS;
+  return db.prepare(`
+    SELECT p.owner, p.collateral, p.borrowed, p.ltv, p.risk, p.action_taken, p.timestamp
+    FROM positions p
+    INNER JOIN (
+      SELECT owner, MAX(timestamp) AS max_timestamp
+      FROM positions
+      WHERE timestamp >= ?
+      GROUP BY owner
+    ) latest
+      ON latest.owner = p.owner
+     AND latest.max_timestamp = p.timestamp
+    WHERE p.timestamp >= ?
+    ${filterClause}
+    ORDER BY p.ltv DESC, p.owner ASC
+  `).all(cutoff, cutoff) as PositionRow[];
+}
+
+function getLatestPositions(): PositionRow[] {
+  return getSnapshotPositions();
+}
+
+function getAtRiskPositions(): PositionRow[] {
+  return getSnapshotPositions(`AND p.risk IN ('WARNING', 'CRITICAL')`);
+}
+
+function getSafePositions(): PositionRow[] {
+  return getSnapshotPositions(`AND p.risk = 'SAFE'`).sort((a, b) => a.ltv - b.ltv || a.owner.localeCompare(b.owner));
+}
+
+function getLatestTimestamp(): number | null {
+  return getLatestSnapshotTimestamp();
 }
 
 function getRecentActions(sinceTimestamp: number): PositionRow[] {
@@ -282,6 +290,10 @@ function handleStatus(config: QueryHandlerConfig): string {
   ].join('\n');
 }
 
+function handleHealth(config: QueryHandlerConfig): string {
+  return handleStatus(config);
+}
+
 async function handleFiberStatus(config: QueryHandlerConfig): Promise<string> {
   if (config.fiberRpcUrl) {
     const liveStatus = await getFiberStatus(config.fiberRpcUrl);
@@ -329,7 +341,28 @@ function handleIdentity(): string {
     '🛡️ I am CKB Guardian.',
     '',
     'I monitor collateralized debt positions on CKB testnet, classify risk, and report simulated protective actions.',
-    'Ask me about current positions, risk, actions today, status, Fiber settlement, or the project.',
+    "Ask me about current positions, risk, actions today, status, Fiber settlement, or the project, and I'll answer from the ckb guardian database.",
+  ].join('\n');
+}
+
+function handleSafePositions(): string {
+  const positions = getSafePositions();
+  if (positions.length === 0) {
+    return [
+      '✅ Safe Positions',
+      '',
+      'No SAFE positions are present in the latest position snapshots.',
+      '',
+      'Source: SQLite guardian.db -> positions',
+    ].join('\n');
+  }
+
+  return [
+    '✅ Safe Positions',
+    '',
+    positions.map(formatPosition).join('\n\n'),
+    '',
+    'Source: SQLite guardian.db -> positions',
   ].join('\n');
 }
 
@@ -360,10 +393,6 @@ export async function answerTelegramQuery(message: string, config: QueryHandlerC
     return helpText(config);
   }
 
-  if (normalized.includes('current positions') || normalized.includes('positions')) {
-    return handleCurrentPositions();
-  }
-
   if (
     normalized.includes('at risk') ||
     normalized.includes('in danger') ||
@@ -372,6 +401,14 @@ export async function answerTelegramQuery(message: string, config: QueryHandlerC
     normalized.includes('critical')
   ) {
     return handleRiskStatus();
+  }
+
+  if (normalized.includes('safe position') || normalized.includes('safe positions')) {
+    return handleSafePositions();
+  }
+
+  if (normalized.includes('current positions') || normalized.includes('positions')) {
+    return handleCurrentPositions();
   }
 
   if (
@@ -384,6 +421,10 @@ export async function answerTelegramQuery(message: string, config: QueryHandlerC
 
   if (normalized.includes('status') || normalized.includes('are you running')) {
     return handleStatus(config);
+  }
+
+  if (normalized === 'health' || normalized.includes('health')) {
+    return handleHealth(config);
   }
 
   if (

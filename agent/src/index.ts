@@ -3,21 +3,27 @@ import { fetchPositions } from './fetcher.js';
 import { rebalance, RebalanceAction } from './rebalancer.js';
 import { generateReport } from './reporter.js';
 import { loadConfig } from './config.js';
-import { initDb, closeDb, saveRun } from './db.js';
+import { initDb, closeDb, savePosition, saveRun } from './db.js';
 import { printFeeStatus } from './fees.js';
 import { printFiberStatus } from './fiber.js';
 import { runStartupHealthCheck } from './health.js';
-import { configureTelegramQueries, initTelegram, sendTelegramMessage, startTelegramPolling, notifyIterationStart, notifyPositionUpdate, notifyRebalanceAction, notifyError, notifyIterationComplete } from './telegram.js';
+import { configureTelegramQueries, initTelegram, sendTelegramMessage, startTelegramPolling, notifyPositionUpdate, notifyRebalanceAction, notifyError } from './telegram.js';
 
 let iterationCount = 0;
 let isShuttingDown = false;
+const lastNotifiedRiskState = new Map<string, string>();
 
 function setupShutdownHandlers() {
-  const shutdown = (signal: string) => {
+  const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
     console.log(`\n[${new Date().toISOString()}] Received ${signal} — shutting down gracefully...`);
     console.log(`[${new Date().toISOString()}] Total iterations completed: ${iterationCount}`);
+    try {
+      await sendTelegramMessage(`🛑 CKB Position Guardian stopped\nSignal: ${signal}\nIterations completed: ${iterationCount}`);
+    } catch (e) {
+      console.error(`[${new Date().toISOString()}] ⚠️  Error sending shutdown notice:`, e);
+    }
     try {
       closeDb();
       console.log(`[${new Date().toISOString()}] ✅ Database closed cleanly`);
@@ -28,11 +34,11 @@ function setupShutdownHandlers() {
     process.exit(0);
   };
 
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => { void shutdown('SIGINT'); });
+  process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
   process.on('uncaughtException', (err) => {
     console.error(`[${new Date().toISOString()}] Uncaught exception:`, err);
-    shutdown('uncaughtException');
+    void shutdown('uncaughtException');
   });
 }
 
@@ -48,6 +54,7 @@ async function main() {
       criticalLtv: config.criticalLtv,
       simulate: config.simulate,
       bootstrapPath: config.telegramBootstrapPath,
+      fiberRpcUrl: config.fiberRpcUrl,
     });
     startTelegramPolling();
     await sendTelegramMessage('🛡️ CKB Position Guardian started');
@@ -80,18 +87,33 @@ async function main() {
           `LTV: ${position.ltv.toFixed(1)}% | ${riskEmoji(position.risk)}`
         );
 
+        savePosition({
+          owner: position.owner,
+          collateral: position.collateral.toString(),
+          borrowed: position.borrowed.toString(),
+          ltv: position.ltv,
+          risk: position.risk,
+          action_taken: 'NONE',
+          timestamp: Date.now(),
+        });
+
         if (position.risk !== 'SAFE') {
           const action = await rebalance(position, config);
           actions.push(action);
+          const currentRiskState = `${position.risk}:${position.ltv.toFixed(1)}:${position.borrowed.toString()}:${position.collateral.toString()}`;
+          const shouldNotifyRisk = lastNotifiedRiskState.get(position.owner) !== currentRiskState;
 
-          await notifyPositionUpdate(
-            position.owner,
-            position.collateral.toString(),
-            position.borrowed.toString(),
-            position.ltv,
-            riskEmoji(position.risk),
-            position.risk
-          );
+          if (shouldNotifyRisk) {
+            await notifyPositionUpdate(
+              position.owner,
+              position.collateral.toString(),
+              position.borrowed.toString(),
+              position.ltv,
+              riskEmoji(position.risk),
+              position.risk
+            );
+            lastNotifiedRiskState.set(position.owner, currentRiskState);
+          }
 
           if (action?.executed) {
             actionsSimulated++;
@@ -110,11 +132,6 @@ async function main() {
       generateReport(positions, actions);
       printFeeStatus();
       await printFiberStatus(config.fiberRpcUrl);
-
-      const duration = Date.now() - startedAt;
-      if (actionsSimulated > 0 || errors > 0) {
-        await notifyIterationComplete(iterationCount, positionsChecked, actionsSimulated, errors, duration);
-      }
 
     } catch (err) {
       errors++;
